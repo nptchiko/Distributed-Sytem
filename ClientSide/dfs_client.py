@@ -17,20 +17,25 @@ Usage:
     c.delete_file(remote_name)
     c.close()
 """
+
 import socket
 import json
 import hashlib
 import os
 from typing import Optional, Dict, Any
 
-ENCODING = 'utf-8'
+ENCODING = "utf-8"
 DEFAULT_BUFSIZE = 8192
+
 
 class DFSProtocolError(Exception):
     pass
 
+
 class DFSClient:
-    def __init__(self, host: str = '127.0.0.1', port: int = 9000, bufsize: int = DEFAULT_BUFSIZE):
+    def __init__(
+        self, host: str = "127.0.0.1", port: int = 9000, bufsize: int = DEFAULT_BUFSIZE
+    ):
         self.host = host
         self.port = port
         self.sock: Optional[socket.socket] = None
@@ -66,7 +71,7 @@ class DFSClient:
     def _recv_control(self) -> Dict[str, Any]:
         assert self.sock is not None
         length_bytes = self._recv_all(4)
-        length = int.from_bytes(length_bytes, 'big')
+        length = int.from_bytes(length_bytes, "big")
         payload = self._recv_all(length)
         try:
             return json.loads(payload.decode(ENCODING))
@@ -76,7 +81,7 @@ class DFSClient:
     def _send_control(self, obj: Dict[str, Any]):
         assert self.sock is not None
         b = json.dumps(obj).encode(ENCODING)
-        self.sock.sendall(len(b).to_bytes(4, 'big') + b)
+        self.sock.sendall(len(b).to_bytes(4, "big") + b)
 
     def list_files(self):
         self._send_control({"type": "list"})
@@ -90,12 +95,14 @@ class DFSClient:
         self._send_control({"type": "delete", "payload": {"name": remote_name}})
         return self._recv_control()
 
-    def upload_file(self, local_path: str, remote_name: Optional[str] = None, progress_callback=None):
+    def upload_file(
+        self, local_path: str, remote_name: Optional[str] = None, progress_callback=None
+    ):
         if not os.path.exists(local_path) or not os.path.isfile(local_path):
             raise FileNotFoundError(local_path)
         size = os.path.getsize(local_path)
         h = hashlib.sha256()
-        with open(local_path, 'rb') as f:
+        with open(local_path, "rb") as f:
             while True:
                 chunk = f.read(self.bufsize)
                 if not chunk:
@@ -104,13 +111,15 @@ class DFSClient:
         sha = h.hexdigest()
         name = remote_name or os.path.basename(local_path)
         # Send control
-        self._send_control({"type": "upload", "payload": {"name": name, "size": size, "sha256": sha}})
+        self._send_control(
+            {"type": "upload", "payload": {"name": name, "size": size, "sha256": sha}}
+        )
         ready = self._recv_control()
         if not ready or ready.get("type") != "ready":
             raise DFSProtocolError(f"Server refused upload: {ready}")
         # stream file bytes
         sent = 0
-        with open(local_path, 'rb') as f:
+        with open(local_path, "rb") as f:
             while True:
                 chunk = f.read(self.bufsize)
                 if not chunk:
@@ -153,4 +162,7 @@ class DFSClient:
             os.remove(tmp_path)
             raise DFSProtocolError("SHA mismatch after download")
         os.replace(tmp_path, local_path)
-        return {"type": "download_result", "payload": {"ok": True, "size": size, "sha256": actual_sha}}
+        return {
+            "type": "download_result",
+            "payload": {"ok": True, "size": size, "sha256": actual_sha},
+        }
