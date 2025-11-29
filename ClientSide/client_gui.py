@@ -17,6 +17,7 @@ Usage:
 
 This GUI is intentionally simple but maps to standard actions present in the original C# client.
 """
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import threading
@@ -26,6 +27,7 @@ from dfs_client import DFSClient, DFSProtocolError
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9000
+
 
 class App(tk.Tk):
     def __init__(self, host=DEFAULT_HOST, port=DEFAULT_PORT):
@@ -45,16 +47,24 @@ class App(tk.Tk):
 
         ttk.Label(conn_frame, text="Host:").pack(side="left")
         self.host_var = tk.StringVar(value=self.host)
-        ttk.Entry(conn_frame, textvariable=self.host_var, width=18).pack(side="left", padx=(4, 8))
+        ttk.Entry(conn_frame, textvariable=self.host_var, width=18).pack(
+            side="left", padx=(4, 8)
+        )
 
         ttk.Label(conn_frame, text="Port:").pack(side="left")
         self.port_var = tk.StringVar(value=str(self.port))
-        ttk.Entry(conn_frame, textvariable=self.port_var, width=7).pack(side="left", padx=(4, 8))
+        ttk.Entry(conn_frame, textvariable=self.port_var, width=7).pack(
+            side="left", padx=(4, 8)
+        )
 
-        self.btn_connect = ttk.Button(conn_frame, text="Connect", command=self.on_connect)
-        self.btn_connect.pack(side="left", padx=(6,4))
+        self.btn_connect = ttk.Button(
+            conn_frame, text="Connect", command=self.on_connect
+        )
+        self.btn_connect.pack(side="left", padx=(6, 4))
 
-        self.btn_disconnect = ttk.Button(conn_frame, text="Disconnect", command=self.on_disconnect, state="disabled")
+        self.btn_disconnect = ttk.Button(
+            conn_frame, text="Disconnect", command=self.on_disconnect, state="disabled"
+        )
         self.btn_disconnect.pack(side="left")
 
         # Middle: file list and actions
@@ -79,24 +89,34 @@ class App(tk.Tk):
         # Action buttons
         action_frame = ttk.Frame(mid_frame)
         action_frame.pack(side="left", fill="y", padx=8)
-        ttk.Button(action_frame, text="Refresh List", command=self.refresh_list).pack(fill="x", pady=(0,6))
-        ttk.Button(action_frame, text="Upload File...", command=self.upload_file_dialog).pack(fill="x", pady=(0,6))
-        ttk.Button(action_frame, text="Download Selected...", command=self.download_selected).pack(fill="x", pady=(0,6))
-        ttk.Button(action_frame, text="Delete Selected", command=self.delete_selected).pack(fill="x", pady=(0,6))
+        ttk.Button(action_frame, text="Refresh List", command=self.refresh_list).pack(
+            fill="x", pady=(0, 6)
+        )
+        ttk.Button(
+            action_frame, text="Upload File...", command=self.upload_file_dialog
+        ).pack(fill="x", pady=(0, 6))
+        ttk.Button(
+            action_frame, text="Download Selected...", command=self.download_selected
+        ).pack(fill="x", pady=(0, 6))
+        ttk.Button(
+            action_frame, text="Delete Selected", command=self.delete_selected
+        ).pack(fill="x", pady=(0, 6))
 
         # Bottom: status and progress
         bottom_frame = ttk.Frame(self)
-        bottom_frame.pack(fill="x", padx=8, pady=(0,8))
+        bottom_frame.pack(fill="x", padx=8, pady=(0, 8))
 
         self.status_var = tk.StringVar(value="Disconnected")
         ttk.Label(bottom_frame, textvariable=self.status_var).pack(side="left")
 
-        self.progress = ttk.Progressbar(bottom_frame, orient="horizontal", length=300, mode="determinate")
+        self.progress = ttk.Progressbar(
+            bottom_frame, orient="horizontal", length=300, mode="determinate"
+        )
         self.progress.pack(side="right")
 
         # Log area
         log_frame = ttk.Frame(self)
-        log_frame.pack(fill="both", expand=False, padx=8, pady=(0,8))
+        log_frame.pack(fill="both", expand=False, padx=8, pady=(0, 8))
         ttk.Label(log_frame, text="Logs:").pack(anchor="w")
         self.log = tk.Text(log_frame, height=6)
         self.log.pack(fill="both", expand=True)
@@ -118,7 +138,7 @@ class App(tk.Tk):
             self.progress.configure(mode="indeterminate")
             return
         self.progress.configure(mode="determinate", maximum=maximum)
-        self.progress['value'] = value
+        self.progress["value"] = value
         self.update_idletasks()
 
     # ---- Connection actions ----
@@ -131,6 +151,7 @@ class App(tk.Tk):
             return
         self.set_status("Connecting...")
         self.log_msg(f"Connecting to {host}:{port}...")
+
         def work():
             try:
                 self.client = DFSClient(host, port)
@@ -144,6 +165,7 @@ class App(tk.Tk):
             except Exception as e:
                 self.log_msg(f"Connect failed: {e}")
                 self.set_status("Disconnected")
+
         threading.Thread(target=work, daemon=True).start()
 
     def on_disconnect(self):
@@ -174,6 +196,7 @@ class App(tk.Tk):
                     self.log_msg(f"Unexpected list response: {resp}")
             except Exception as e:
                 self.log_msg(f"Refresh failed: {e}")
+
         threading.Thread(target=work, daemon=True).start()
 
     def upload_file_dialog(self):
@@ -182,30 +205,40 @@ class App(tk.Tk):
             return
         remote_name = None
         # optional prompt for remote name
-        if messagebox.askyesno("Remote name", "Use original filename as remote name? (No = choose different name)"):
+        if messagebox.askyesno(
+            "Remote name",
+            "Use original filename as remote name? (No = choose different name)",
+        ):
             remote_name = None
         else:
-            remote_name = tk.simpledialog.askstring("Remote name", "Enter remote name (leave blank to use original):")
+            remote_name = tk.simpledialog.askstring(
+                "Remote name", "Enter remote name (leave blank to use original):"
+            )
+
         def progress(sent, total):
             self.set_progress(sent, total)
+
         def work():
             try:
                 self.set_progress(0, 100)
                 self.log_msg(f"Uploading {path}...")
-                result = self.client.upload_file(path, remote_name, progress_callback=progress)
+                result = self.client.upload_file(
+                    path, remote_name, progress_callback=progress
+                )
                 self.log_msg(f"Upload result: {result}")
                 self.refresh_list()
             except Exception as e:
                 self.log_msg(f"Upload failed: {e}")
             finally:
                 self.set_progress(0, 100)
+
         threading.Thread(target=work, daemon=True).start()
 
     def _get_selected(self):
         sel = self.tree.selection()
         if not sel:
             return None
-        values = self.tree.item(sel[0], 'values')
+        values = self.tree.item(sel[0], "values")
         if not values:
             return None
         return values[0]
@@ -218,8 +251,10 @@ class App(tk.Tk):
         local = filedialog.asksaveasfilename(initialfile=name)
         if not local:
             return
+
         def progress(received, total):
             self.set_progress(received, total)
+
         def work():
             try:
                 self.set_progress(0, 100)
@@ -230,6 +265,7 @@ class App(tk.Tk):
                 self.log_msg(f"Download failed: {e}")
             finally:
                 self.set_progress(0, 100)
+
         threading.Thread(target=work, daemon=True).start()
 
     def delete_selected(self):
@@ -239,6 +275,7 @@ class App(tk.Tk):
             return
         if not messagebox.askyesno("Delete", f"Delete remote file '{name}'?"):
             return
+
         def work():
             try:
                 self.log_msg(f"Deleting {name}...")
@@ -247,7 +284,9 @@ class App(tk.Tk):
                 self.refresh_list()
             except Exception as e:
                 self.log_msg(f"Delete failed: {e}")
+
         threading.Thread(target=work, daemon=True).start()
+
 
 def main():
     host = DEFAULT_HOST
@@ -261,6 +300,7 @@ def main():
             port = DEFAULT_PORT
     app = App(host, port)
     app.mainloop()
+
 
 if __name__ == "__main__":
     main()
