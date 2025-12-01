@@ -3,7 +3,7 @@ import threading
 import json
 import sys
 
-# Server addresses (Backend)
+# Server addresses
 server1 = ("127.0.0.1", 8001) # Image server
 server2 = ("127.0.0.1", 8002) # Video server
 
@@ -11,7 +11,7 @@ class Coordinator:
     def __init__(self, ip, port):
         self.ip = ip
         self.port = port
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # Đổi tên thành self.sock cho thống nhất
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind((self.ip, self.port))
         self.sock.listen(5)
