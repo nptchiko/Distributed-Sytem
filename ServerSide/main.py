@@ -235,12 +235,8 @@ def handle_upload(sock: socket.socket, payload: dict):
             _send_control(
                 sock,
                 {
-                    "type": "upload_result",
-                    "payload": {
-                        "ok": False,
-                        "reason": "sha_mismatch",
-                        "actual_sha": actual_sha,
-                    },
+                    "type": "error",
+                    "payload": "sha_mismatch",
                 },
             )
             return
@@ -258,9 +254,7 @@ def handle_upload(sock: socket.socket, payload: dict):
                 os.remove(dst_path + ".tmp")
         except Exception:
             pass
-        _send_control(
-            sock, {"type": "upload_result", "payload": {"ok": False, "reason": str(e)}}
-        )
+        _send_control(sock, {"type": "error", "payload": str(e)})
 
 
 def handle_download(sock: socket.socket, path: str, filters: list):
@@ -287,6 +281,7 @@ def handle_download(sock: socket.socket, path: str, filters: list):
                 sock.sendall(chunk)
     except Exception as e:
         print("Error while sending file:", e)
+        _send_control(sock, {"type": "error", "payload": str(e)})
 
 
 def handle_delete(sock: socket.socket, payload: dict):
@@ -305,9 +300,7 @@ def handle_delete(sock: socket.socket, payload: dict):
         _broadcast_system(f"file_removed:{safe_name}")
         print(f"Deleted file: {safe_name}")
     except Exception as e:
-        _send_control(
-            sock, {"type": "delete_result", "payload": {"ok": False, "reason": str(e)}}
-        )
+        _send_control(sock, {"type": "error", "payload": str(e)})
 
 
 def _safe_path(requested_path):
@@ -394,7 +387,12 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
     except ConnectionResetError:
         pass
     except Exception as e:
-        print("Client handler error:", e)
+        print(f"Client handler error for {addr}: {e}")
+        try:
+            # Attempt to send a generic error response to the client
+            _send_control(client_sock, {"type": "error", "payload": str(e)})
+        except Exception as send_error:
+            print(f"Failed to send error message to {addr}: {send_error}")
     finally:
         _remove_client(client_sock)
 
