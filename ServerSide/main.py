@@ -243,27 +243,49 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
     print(f"New client: {addr}")
     try:
         while True:
-            ctrl = _recv_control(client_sock)
-            if ctrl is None:
+            data = client_sock.recv(4096)
+            jsonData = data.decode(ENCODING)
+            print(f"-> Json requested: {jsonData}")
+            jsonData = json.loads(jsonData)
+
+            if  jsonData is None:
+                print("error")
                 break
-            typ = ctrl.get("type")
-            payload = ctrl.get("payload")
-            if typ == "list":
-                files = _list_storage()
+            
+            command = jsonData.get("command")
+            payload = jsonData.get("payload")
+            path = jsonData.get("path")
+            filter = jsonData.get("filter")
+            
+            if payload is None:
+                payload = {}
+            
+            if path is None:
+                path = STORAGE_DIR
+            
+            print(f"path requested: {path}")
+
+            # ctrl = _recv_control(client_sock)
+            # if ctrl is None:
+            #     break
+            # typ = ctrl.get("type")
+            # payload = ctrl.get("payload")
+            if command == "list":
+                files = load_directory(path, filter)
                 _send_control(client_sock, {"type": "list", "payload": files})
 
-            elif typ == "upload":
+            elif command == "upload":
                 # payload: {"name":..., "size":..., "sha256":...}
                 handle_upload(client_sock, payload or {})
 
-            elif typ == "download":
+            elif command == "download":
                 # payload: {"name":...}
                 handle_download(client_sock, payload or {})
 
-            elif typ == "delete":
+            elif command == "delete":
                 handle_delete(client_sock, payload or {})
 
-            elif typ == "ping":
+            elif command == "ping":
                 _send_control(client_sock, {"type": "pong", "payload": None})
 
             else:
