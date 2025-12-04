@@ -27,7 +27,7 @@ from dfs_client import DFSClient, DFSProtocolError
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9000
-DEFAULT_PATH = "/home/public/Documents/"
+DEFAULT_PATH = "./"
 
 
 class App(tk.Tk):
@@ -191,7 +191,7 @@ class App(tk.Tk):
         def work():
             try:
                 resp = self.client.list_files()
-                if resp.get("type") == "list":
+                if resp.get("command") == "list":
                     files = resp.get("payload", [])
                     self.tree.delete(*self.tree.get_children())
                     for f in files:

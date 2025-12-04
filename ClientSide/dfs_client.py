@@ -89,16 +89,16 @@ class DFSClient:
     # agruemnt: filter
     # example: "all", "image", "video"
     def list_files(self, filter: Optional[str] = None):
-        self._send_control({"type": "list", "filters": filter, "path": self.path})
+        self._send_control({"command": "list", "filters": filter, "path": self.path})
         return self._recv_control()
 
     def ping(self):
-        self._send_control({"type": "ping"})
+        self._send_control({"command": "ping"})
         return self._recv_control()
 
     def delete_file(self, remote_name: str):
         self._send_control({
-                "type": "delete", 
+                "command": "delete", 
                 "payload": {
                     "path": f"{self.path}{remote_name}"
                 }
@@ -122,10 +122,10 @@ class DFSClient:
         name = remote_name or os.path.basename(local_path)
         # Send control
         self._send_control(
-            {"type": "upload", "payload": {"name": name, "size": size, "sha256": sha}}
+            {"command": "upload", "payload": {"name": name, "size": size, "sha256": sha}}
         )
         ready = self._recv_control()
-        if not ready or ready.get("type") != "ready":
+        if not ready or ready.get("command") != "ready":
             raise DFSProtocolError(f"Server refused upload: {ready}")
         # stream file bytes
         sent = 0
@@ -155,7 +155,7 @@ class DFSClient:
 
     # author: QuangMinh
     # Description: add filter of file to load-balancing server with filter
-    # Example: {"type": "download", "payload": {"name": "/home/public/Documents/a.jpg", "filter": "image"}}
+    # Example: {"command": "download", "payload": {"name": "/home/public/Documents/a.jpg", "filter": "image"}}
     def download_file(self, remote_name: str, local_path: str, progress_callback=None):
         if not os.path.exists(os.path.dirname(local_path)):
             os.makedirs(os.path.dirname(local_path))    
@@ -169,9 +169,9 @@ class DFSClient:
         ready = self._recv_control()
         if not ready:
             raise DFSProtocolError("No response from server")
-        if ready.get("type") == "error":
+        if ready.get("command") == "error":
             return ready
-        if ready.get("type") != "ready":
+        if ready.get("command") != "ready":
             raise DFSProtocolError(f"Unexpected control reply: {ready}")
         size = int(ready["payload"]["size"])
         expected_sha = ready["payload"].get("sha256")
@@ -195,6 +195,6 @@ class DFSClient:
             raise DFSProtocolError("SHA mismatch after download")
         os.replace(tmp_path, local_path)
         return {
-            "type": "download_result",
+            "command": "download_result",
             "payload": {"ok": True, "size": size, "sha256": actual_sha},
         }
