@@ -34,10 +34,11 @@ class DFSProtocolError(Exception):
 
 class DFSClient:
     def __init__(
-        self, host: str = "127.0.0.1", port: int = 9000, bufsize: int = DEFAULT_BUFSIZE
+        self, host: str = "127.0.0.1", port: int = 9000, path: str = "/home/public/Documents/", bufsize: int = DEFAULT_BUFSIZE
     ):
         self.host = host
         self.port = port
+        self.path = path
         self.sock: Optional[socket.socket] = None
         self.bufsize = bufsize
 
@@ -76,6 +77,7 @@ class DFSClient:
         try:
             return json.loads(payload.decode(ENCODING))
         except Exception as e:
+            return "Not found"
             raise DFSProtocolError("Invalid control JSON") from e
 
     def _send_control(self, obj: Dict[str, Any]):
@@ -83,8 +85,11 @@ class DFSClient:
         b = json.dumps(obj).encode(ENCODING)
         self.sock.sendall(len(b).to_bytes(4, "big") + b)
 
-    def list_files(self):
-        self._send_control({"type": "list"})
+    # author: Quang Minh
+    # agruemnt: filter
+    # example: "all", "image", "video"
+    def list_files(self, filter: Optional[str] = None):
+        self._send_control({"type": "list", "filters": filter, "path": self.path})
         return self._recv_control()
 
     def ping(self):
@@ -92,7 +97,12 @@ class DFSClient:
         return self._recv_control()
 
     def delete_file(self, remote_name: str):
-        self._send_control({"type": "delete", "payload": {"name": remote_name}})
+        self._send_control({
+                "type": "delete", 
+                "payload": {
+                    "path": f"{self.path}{remote_name}"
+                }
+            })
         return self._recv_control()
 
     def upload_file(
@@ -131,9 +141,31 @@ class DFSClient:
         # receive result
         return self._recv_control()
 
+    # author: QuangMinh
+    # Description: filter function use for check type of file to navigate image-server or video server
+    # input: str: absolute path of file
+    # output: filter -> image or video
+    # def _filter(self, remote_name: str):
+    #     if remote_name.endswith(".jpg") or remote_name.endswith(".jpeg") or remote_name.endswith(".png"):
+    #         return "image"
+    #     elif remote_name.endswith(".mp4") or remote_name.endswith(".mkv") or remote_name.endswith(".webm") or remote_name.endswith(".flv"):
+    #         return "video"
+    #     else:
+    #         return None
+
+    # author: QuangMinh
+    # Description: add filter of file to load-balancing server with filter
+    # Example: {"type": "download", "payload": {"name": "/home/public/Documents/a.jpg", "filter": "image"}}
     def download_file(self, remote_name: str, local_path: str, progress_callback=None):
+        if not os.path.exists(os.path.dirname(local_path)):
+            os.makedirs(os.path.dirname(local_path))    
         # send control
-        self._send_control({"type": "download", "payload": {"name": remote_name}})
+        self._send_control({
+            "command": "download", 
+            "payload": {
+                "path": f"{self.path}{remote_name}"
+                }, 
+            "filter": _filter(remote_name)})
         ready = self._recv_control()
         if not ready:
             raise DFSProtocolError("No response from server")
