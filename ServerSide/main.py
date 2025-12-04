@@ -39,6 +39,12 @@ ENCODING = "utf-8"
 STORAGE_DIR = os.path.join(os.getcwd(), "storage")
 RECV_BUFFER = 8192
 
+SOUND_EXTENSIONS = {"mp3", "m4p", "m4a", "flac"}
+VIDEO_EXTENSIONS = {"mp4", "mkv", "webm", "flv"}
+TEXT_EXTENSIONS = {"txt", "doc", "docx"}
+IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "bmp"}
+COMPRESSED_EXTENSIONS = {"7z", "rar", "zip"}
+
 if not os.path.exists(STORAGE_DIR):
     os.makedirs(STORAGE_DIR, exist_ok=True)
 
@@ -116,6 +122,72 @@ def _list_storage():
             sha256 = _file_sha256(path)
             res.append({"name": fname, "size": size, "sha256": sha256})
     return res
+
+
+def is_end_with(file_type, path):
+    try:
+        extension = path.split(".")[-1].lower()
+    except IndexError:
+        return False  # No extension
+
+    if file_type == "sound":
+        return extension in SOUND_EXTENSIONS
+    if file_type == "video":
+        return extension in VIDEO_EXTENSIONS
+    if file_type == "text":
+        return extension in TEXT_EXTENSIONS
+    if file_type == "image":
+        return extension in IMAGE_EXTENSIONS
+    if file_type == "compressed":
+        return extension in COMPRESSED_EXTENSIONS
+    if file_type == "all":
+        return True
+
+    # Check for a specific custom extension
+    return extension == file_type.lower()
+
+
+def load_directory(root_path, filters):
+
+    if not os.path.isdir(root_path):
+        return {"error": "Path is not a valid directory."}
+
+    # The root of our directory tree
+    dir_tree = {
+        "name": os.path.basename(root_path),
+        "path": root_path,
+        "subdirectories": [],
+        "files": [],
+    }
+
+    # A map to keep track of directory objects to append children to the right parent
+    dir_map = {root_path: dir_tree}
+
+    for parent_path, subdirs, files in os.walk(root_path):
+        parent_node = dir_map[parent_path]
+
+        # Process subdirectories
+        if "folder" not in filters:
+            for subdir_name in subdirs:
+                sub_path = os.path.join(parent_path, subdir_name)
+                subdir_node = {
+                    "name": subdir_name,
+                    "path": sub_path,
+                    "subdirectories": [],
+                    "files": [],
+                }
+                parent_node["subdirectories"].append(subdir_node)
+                dir_map[sub_path] = subdir_node
+
+        # Process files
+        for filename in files:
+            file_path = os.path.join(parent_path, filename)
+
+            # Check if the file matches any of the filters
+            if any(is_end_with(f, file_path) for f in filters):
+                parent_node["files"].append({"name": filename, "path": file_path})
+
+    return dir_tree
 
 
 def _file_sha256(path: str) -> str:
@@ -237,6 +309,19 @@ def handle_delete(sock: socket.socket, payload: dict):
         )
 
 
+def _safe_path(requested_path):
+
+    safe_path = requested_path.lstrip('/')
+
+    full_path = os.path.join(STORAGE_DIR, safe_path)
+
+    real_path = os.path.realpath(full_path)
+
+    if os.path.commonprefix([real_path, STORAGE_DIR]) == STORAGE_DIR:
+        return real_path
+    raise ValueError("Invalid path")
+
+
 def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
     with clients_lock:
         clients[client_sock] = {"addr": addr, "connected_at": time.time()}
@@ -254,14 +339,27 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
             
             command = jsonData.get("command")
             payload = jsonData.get("payload")
-            path = jsonData.get("path")
-            filter = jsonData.get("filter")
+            # path = jsonData.get("path")
+            filters = jsonData.get("filters")
+
+            try:
+                path = jsonData.get("path")
+                if path:
+                    path = _safe_path(path)
+                else:
+                    path = STORAGE_DIR
+            except ValueError as e:
+                _send_control(client_sock, {"type": "error", "payload": str(e)})
+                break
             
             if payload is None:
                 payload = {}
             
             if path is None:
                 path = STORAGE_DIR
+
+            if filters is None:
+                filters = []
             
             print(f"path requested: {path}")
 
@@ -271,7 +369,7 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
             # typ = ctrl.get("type")
             # payload = ctrl.get("payload")
             if command == "list":
-                files = load_directory(path, filter)
+                files = load_directory(path, filters)
                 _send_control(client_sock, {"type": "list", "payload": files})
 
             elif command == "upload":
