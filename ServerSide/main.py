@@ -362,7 +362,7 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
                 payload = {}
             
             # if path is None:
-            #     path = STORAGE_DIR
+            #     path = STORAGE_DIR //loop
 
             if filters is None:
                 filters = ["all"]
