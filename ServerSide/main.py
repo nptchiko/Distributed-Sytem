@@ -263,16 +263,17 @@ def handle_upload(sock: socket.socket, payload: dict):
         )
 
 
-def handle_download(sock: socket.socket, payload: dict):
-    name = payload.get("name")
-    if not name:
-        _send_control(sock, {"type": "error", "payload": "Missing name for download"})
-        return
-    safe_name = os.path.basename(name)
-    path = os.path.join(STORAGE_DIR, safe_name)
-    if not os.path.exists(path) or not os.path.isfile(path):
+def handle_download(sock: socket.socket, path: str, filters: list):
+    # The `path` is expected to be an absolute and safe path from `_safe_path()`
+    if not os.path.isfile(path):
         _send_control(sock, {"type": "error", "payload": "file_not_found"})
         return
+
+    # Check if the file matches the filters, if any filters are provided.
+    if filters and not any(is_end_with(f, path) for f in filters):
+        _send_control(sock, {"type": "error", "payload": "file_type_mismatch"})
+        return
+
     size = os.path.getsize(path)
     sha = _file_sha256(path)
     _send_control(sock, {"type": "ready", "payload": {"size": size, "sha256": sha}})
@@ -377,8 +378,8 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
                 handle_upload(client_sock, payload or {})
 
             elif command == "download":
-                # payload: {"name":...}
-                handle_download(client_sock, payload or {})
+                # The 'path' variable is sanitized by _safe_path and passed directly.
+                handle_download(client_sock, path, filters)
 
             elif command == "delete":
                 handle_delete(client_sock, payload or {})
