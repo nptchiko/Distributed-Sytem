@@ -27,10 +27,11 @@ from dfs_client import DFSClient, DFSProtocolError
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9000
+DEFAULT_PATH = "./"
 
 
 class App(tk.Tk):
-    def __init__(self, host=DEFAULT_HOST, port=DEFAULT_PORT):
+    def __init__(self, host=DEFAULT_HOST, port=DEFAULT_PORT, path=DEFAULT_PATH):
         super().__init__()
         self.title("DFS Client (Tkinter)")
         self.geometry("800x520")
@@ -38,6 +39,7 @@ class App(tk.Tk):
 
         self.host = host
         self.port = port
+        self.path = path
         self.client = DFSClient(self.host, self.port)
         self.worker_lock = threading.Lock()
 
@@ -54,6 +56,12 @@ class App(tk.Tk):
         ttk.Label(conn_frame, text="Port:").pack(side="left")
         self.port_var = tk.StringVar(value=str(self.port))
         ttk.Entry(conn_frame, textvariable=self.port_var, width=7).pack(
+            side="left", padx=(4, 8)
+        )
+
+        ttk.Label(conn_frame, text="Path:").pack(side="left")
+        self.path_var = tk.StringVar(value=str(self.path))
+        ttk.Entry(conn_frame, textvariable=self.path_var, width=20).pack(
             side="left", padx=(4, 8)
         )
 
@@ -183,7 +191,7 @@ class App(tk.Tk):
         def work():
             try:
                 resp = self.client.list_files()
-                if resp.get("type") == "list":
+                if resp.get("command") == "list":
                     files = resp.get("payload", [])
                     self.tree.delete(*self.tree.get_children())
                     for f in files:
@@ -291,6 +299,7 @@ class App(tk.Tk):
 def main():
     host = DEFAULT_HOST
     port = DEFAULT_PORT
+    path = DEFAULT_PATH
     if len(sys.argv) > 1:
         host = sys.argv[1]
     if len(sys.argv) > 2:
@@ -298,7 +307,13 @@ def main():
             port = int(sys.argv[2])
         except Exception:
             port = DEFAULT_PORT
-    app = App(host, port)
+    if len(sys.argv) > 3:
+        try:
+            path = int(sys.argv[3])
+        except Exception:
+            path = DEFAULT_PATH    
+
+    app = App(host, port, path)
     app.mainloop()
 
 
