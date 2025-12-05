@@ -34,7 +34,8 @@ import time
 from typing import Dict, Tuple
 
 HOST = "0.0.0.0"
-PORT = 9000
+PORT = 9000     #video
+# PORT = 9001   #image
 ENCODING = "utf-8"
 STORAGE_DIR = os.path.join(os.getcwd(), "storage")
 RECV_BUFFER = 8192
@@ -209,8 +210,11 @@ def handle_upload(sock: socket.socket, payload: dict):
         _send_control(sock, {"type": "error", "payload": "Invalid upload parameters"})
         return
 
-    safe_name = os.path.basename(name)
-    dst_path = os.path.join(STORAGE_DIR, safe_name)
+    try:
+        dst_path = _safe_path(name)
+    except ValueError:
+        _send_control(sock, {"type": "error", "payload": "Invalid path"})
+        return
 
     # If file exists, we overwrite (could be changed to reject)
     _send_control(sock, {"type": "ready", "payload": None})
@@ -246,6 +250,7 @@ def handle_upload(sock: socket.socket, payload: dict):
             sock,
             {"type": "upload_result", "payload": {"ok": True, "sha256": actual_sha}},
         )
+        safe_name = os.path.basename(dst_path)
         print(f"Uploaded file: {safe_name} ({size} bytes) sha256={actual_sha}")
         _broadcast_system(f"file_added:{safe_name}")
     except Exception as e:
@@ -289,14 +294,22 @@ def handle_delete(sock: socket.socket, payload: dict):
     if not name:
         _send_control(sock, {"type": "error", "payload": "Missing name for delete"})
         return
-    safe_name = os.path.basename(name)
-    path = os.path.join(STORAGE_DIR, safe_name)
+    
+    # safe_name = os.path.basename(name)
+    # path = os.path.join(STORAGE_DIR, safe_name)
+    try:
+        path = _safe_path(name)
+    except ValueError:
+        _send_control(sock, {"type": "error", "payload": "Invalid path"})
+        return
+    
     if not os.path.exists(path):
         _send_control(sock, {"type": "error", "payload": "file_not_found"})
         return
     try:
         os.remove(path)
         _send_control(sock, {"type": "delete_result", "payload": {"ok": True}})
+        safe_name = os.path.basename(path)
         _broadcast_system(f"file_removed:{safe_name}")
         print(f"Deleted file: {safe_name}")
     except Exception as e:
@@ -311,7 +324,7 @@ def _safe_path(requested_path):
 
     real_path = os.path.realpath(full_path)
 
-    if os.path.commonprefix([real_path, STORAGE_DIR]) == STORAGE_DIR:
+    if os.path.commonpath([real_path, STORAGE_DIR]) == STORAGE_DIR: 
         return real_path
     raise ValueError("Invalid path")
 
@@ -353,7 +366,7 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
                 path = STORAGE_DIR
 
             if filters is None:
-                filters = []
+                filters = ["all"]
             
             print(f"path requested: {path}")
 
@@ -363,6 +376,10 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
             # typ = ctrl.get("type")
             # payload = ctrl.get("payload")
             if command == "list":
+                if not os.path.isdir(path):
+                    _send_control(client_sock, {"type": "error", "payload": "file_not_found"})
+                    continue
+
                 files = load_directory(path, filters)
                 _send_control(client_sock, {"type": "list", "payload": files})
 
