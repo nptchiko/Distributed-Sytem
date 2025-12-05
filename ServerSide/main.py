@@ -34,7 +34,7 @@ import time
 from typing import Dict, Tuple
 
 HOST = "0.0.0.0"
-PORT = 9000     #video
+PORT = 9002     #video
 # PORT = 9001   #image
 ENCODING = "utf-8"
 STORAGE_DIR = os.path.join(os.getcwd(), "storage")
@@ -153,10 +153,12 @@ def load_directory(root_path, filters):
     if not os.path.isdir(root_path):
         return {"error": "Path is not a valid directory."}
 
+    storage_parent_dir = os.path.dirname(STORAGE_DIR)
+
     # The root of our directory tree
     dir_tree = {
         "name": os.path.basename(root_path),
-        "path": root_path,
+        "path": os.path.relpath(root_path, storage_parent_dir),
         "subdirectories": [],
         "files": [],
     }
@@ -173,7 +175,7 @@ def load_directory(root_path, filters):
                 sub_path = os.path.join(parent_path, subdir_name)
                 subdir_node = {
                     "name": subdir_name,
-                    "path": sub_path,
+                    "path": os.path.relpath(sub_path, storage_parent_dir),
                     "subdirectories": [],
                     "files": [],
                 }
@@ -186,7 +188,7 @@ def load_directory(root_path, filters):
 
             # Check if the file matches any of the filters
             if any(is_end_with(f, file_path) for f in filters):
-                parent_node["files"].append({"name": filename, "path": file_path})
+                parent_node["files"].append({"name": filename, "path": os.path.relpath(file_path, storage_parent_dir)})
 
     return dir_tree
 
