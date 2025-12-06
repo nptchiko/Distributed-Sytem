@@ -1,12 +1,15 @@
 import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, messagebox
+from PIL import Image, ImageTk  # <--- NEW: Required for images
+import io
+import threading  # <--- NEW: To keep UI responsive
 
 
 class FileClientApp:
     def __init__(self, root):
         self.root = root
         self.root.title("UI Client")
-        self.root.geometry("900x650")
+        self.root.geometry("1000x700")  # Slightly wider for preview
 
         self.client_socket = None
         self.is_connected = False
@@ -19,10 +22,14 @@ class FileClientApp:
             "white": "#ffffff",
         }
 
+        # Placeholder for the current preview image to prevent garbage collection
+        self.current_image = None
+
         self.setup_styles()
         self.create_layout()
 
     def setup_styles(self):
+        # ... (Your existing styles code remain exactly the same) ...
         style = ttk.Style()
         style.theme_use("clam")
 
@@ -54,13 +61,14 @@ class FileClientApp:
             background="#bdc3c7",
             foreground=self.colors["text"],
         )
-
         style.map(
             "TButton",
             background=[("active", self.colors["accent"]), ("!disabled", "#bdc3c7")],
         )
 
     def create_layout(self):
+        # ... (Keep Header and Left Frame code exactly the same until 'File Response List') ...
+
         # --- HEADER ---
         header_frame = tk.Frame(self.root, bg=self.colors["primary"], height=80)
         header_frame.pack(side="top", fill="x")
@@ -134,12 +142,12 @@ class FileClientApp:
 
         self.tree.pack(side="left", fill="both", expand=True)
         tree_scroll.pack(side="right", fill="y")
-
         self.tree.heading("#0", text="Folder / File Name", anchor="w")
 
-        self.tree.tag_configure("odd", background="#f8f9fa")
-        self.tree.tag_configure("even", background="#ffffff")
+        # --- NEW: Bind Click Event to Treeview ---
+        self.tree.bind("<<TreeviewSelect>>", self.on_file_select)
 
+        # --- RIGHT FRAME (Modified for Preview) ---
         right_frame = ttk.Frame(body_frame, style="Card.TFrame", padding=15)
         right_frame.pack(side="right", fill="y", anchor="n")
 
@@ -152,7 +160,6 @@ class FileClientApp:
 
         self.check_vars = {}
         options = ["All files", "Image files", "Video files"]
-
         for opt in options:
             var = tk.IntVar()
             if opt == "All files":
@@ -160,27 +167,42 @@ class FileClientApp:
             chk = ttk.Checkbutton(
                 right_frame, text=opt, variable=var, style="TCheckbutton"
             )
-
-            style = ttk.Style()
-            style.configure("TCheckbutton", background="white", font=("Segoe UI", 10))
             chk.pack(fill="x", pady=8, anchor="w")
             self.check_vars[opt] = var
 
+        style = ttk.Style()
+        style.configure("TCheckbutton", background="white", font=("Segoe UI", 10))
+
         ttk.Separator(right_frame, orient="horizontal").pack(fill="x", pady=20)
 
-        ttk.Label(right_frame, text="Custom Extensions:", background="white").pack(
-            anchor="w", pady=(0, 5)
-        )
-        self.entry_ext = ttk.Entry(right_frame)
-        self.entry_ext.pack(fill="x")
+        # --- NEW: PREVIEW SECTION ---
         ttk.Label(
             right_frame,
-            text="(e.g. .pnj; .pdf)",
-            font=("Segoe UI", 8, "italic"),
+            text="File Preview",
+            font=("Segoe UI", 12, "bold"),
             background="white",
-            foreground="#7f8c8d",
-        ).pack(anchor="w")
+        ).pack(anchor="w", pady=(0, 10))
 
+        self.preview_container = tk.Frame(
+            right_frame, bg="white", height=250, width=250
+        )
+        self.preview_container.pack(fill="x")
+        self.preview_container.pack_propagate(False)  # Force size
+
+        # Label for Image Previews
+        self.lbl_preview_img = tk.Label(
+            self.preview_container, bg="#ecf0f1", text="No Preview"
+        )
+        self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
+
+        # Text Widget for Text Previews (Initially Hidden)
+        self.txt_preview = tk.Text(
+            self.preview_container, height=10, width=30, font=("Consolas", 8)
+        )
+
+        # ---------------------------
+
+    # ... (Keep create_toolbar_btn and browse_folder the same) ...
     def create_toolbar_btn(self, parent, text, icon, cmd):
         btn = tk.Button(
             parent,
@@ -203,7 +225,92 @@ class FileClientApp:
             self.entry_req.delete(0, tk.END)
             self.entry_req.insert(0, path)
 
+    # --- NEW: Logic to handle file selection ---
+    def on_file_select(self, event):
+        selected_item = self.tree.selection()
+        if not selected_item:
+            return
+
+        file_name = self.tree.item(selected_item[0], "text")
+
+        # Reset Preview Panel
+        self.lbl_preview_img.config(image="", text="Loading...")
+        self.txt_preview.pack_forget()
+        self.lbl_preview_img.pack(fill="both", expand=True)
+
+        # In a real app, check if it's a file or folder before requesting
+        # For now, we assume everything is a file and request preview
+        threading.Thread(
+            target=self.fetch_preview_data, args=(file_name,), daemon=True
+        ).start()
+
+    # --- NEW: Fetch logic (Connects to your socket code) ---
+    def fetch_preview_data(self, filename):
+        """
+        This function simulates the network request.
+        Replace the logic inside with your actual socket _send_control calls.
+        """
+        if not self.client_socket:
+            self.update_ui_preview(None, "Not Connected")
+            return
+
+        try:
+            # 1. SEND REQUEST (Using logic from previous turn)
+            # _send_control(self.client_socket, {"type": "preview", "payload": {"name": filename}})
+
+            # 2. RECEIVE RESPONSE
+            # resp = _recv_control(self.client_socket)
+
+            # SIMULATED RESPONSE FOR UI TESTING:
+            import time
+
+            time.sleep(0.5)  # Simulate network lag
+
+            # Logic to handle response:
+            # if resp['type'] == 'preview_ready':
+            #    data = _recv_all(self.client_socket, resp['payload']['size'])
+            #    self.root.after(0, self.update_ui_preview, data, resp['payload']['type'])
+
+            pass
+        except Exception as e:
+            print(f"Preview error: {e}")
+
+    # --- NEW: Update UI from Main Thread ---
+    def update_ui_preview(self, data, p_type):
+        """
+        Called by the thread to update the UI safely.
+        """
+        if p_type == "image" and data:
+            try:
+                # Load image from bytes
+                pil_image = Image.open(io.BytesIO(data))
+
+                # Resize to fit container (250x250)
+                pil_image.thumbnail((240, 240))
+                tk_img = ImageTk.PhotoImage(pil_image)
+
+                # Update Label
+                self.current_image = tk_img  # Keep reference!
+                self.lbl_preview_img.config(image=tk_img, text="")
+            except Exception:
+                self.lbl_preview_img.config(image="", text="Image Error")
+
+        elif p_type == "text" and data:
+            self.lbl_preview_img.pack_forget()
+            self.txt_preview.pack(fill="both", expand=True)
+            self.txt_preview.delete("1.0", tk.END)
+            self.txt_preview.insert("1.0", data.decode("utf-8"))
+
+        else:
+            self.lbl_preview_img.config(image="", text="No Preview Available")
+
     def on_connect_click(self):
+        # Add your socket connection logic here
+        self.entry_status.config(state="normal")
+        self.entry_status.delete(0, tk.END)
+        self.entry_status.insert(0, "Connected")
+        self.entry_status.config(state="readonly")
+        # self.client_socket = ...
         pass
 
     def on_send_click(self):
