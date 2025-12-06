@@ -108,122 +108,153 @@ class Coordinator:
     #download function
     def handle_download(self, client_sock, request_dict):
         path = request_dict.get("path")
-        if not path:
-            self._send_packet(client_sock, {"type": "error", "payload": "path_required"})
-            return
-
         target_server = self._get_target_server_by_path(path)
-        if not target_server:
-            self._send_packet(client_sock, {"type": "error", "payload": "unknown_file_type"})
-            return
 
-        print(f"[DOWNLOAD] {path} from {target_server}")
+        if not target_server:
+            self._send_packet(client_sock, {"type": "error", "payload": "file_not_found"})
+            return
 
         try:
-            # connect to target server
             srv_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             srv_sock.settimeout(10)
             srv_sock.connect(target_server)
-
-            # download request
             self._send_packet(srv_sock, request_dict)
 
-            # read Header  Backend -> Forward Client
+            # Forward Header
             len_bytes = srv_sock.recv(4)
             if not len_bytes:
                 self._send_packet(client_sock, {"type": "error", "payload": "server_no_response"})
                 srv_sock.close()
                 return
-
             client_sock.sendall(len_bytes)
 
-            # send JSON Backend -> Forward Client
+            # Forward JSON
             json_len = struct.unpack('!I', len_bytes)[0]
             json_data = b""
             while len(json_data) < json_len:
                 chunk = srv_sock.recv(min(4096, json_len - len(json_data)))
-                if not chunk:
-                    break
+                if not chunk: break
                 json_data += chunk
-
             client_sock.sendall(json_data)
 
-            # Parse response check status
+            # Check ready and Stream Data
             resp = json.loads(json_data.decode('utf-8'))
-
             if resp.get("type") == "ready":
                 file_size = resp["payload"].get("size", 0)
-                print(f"[DOWNLOAD] Streaming {file_size} bytes...")
-
-                # Stream binary data
                 received = 0
                 while received < file_size:
                     chunk = srv_sock.recv(min(8192, file_size - received))
-                    if not chunk:
-                        break
+                    if not chunk: break
                     client_sock.sendall(chunk)
                     received += len(chunk)
-
-                print(f"[DOWNLOAD] Complete - {received}/{file_size} bytes transferred")
-            else:
-                print(f"[DOWNLOAD] Server response: {resp.get('type')} - {resp.get('payload')}")
-
             srv_sock.close()
-
         except Exception as e:
-            print(f"[ERROR] Download proxy: {e}")
-            try:
-                self._send_packet(client_sock, {"type": "error", "payload": str(e)})
-            except:
-                pass
+            print(f"[ERROR] Download: {e}")
     #seacrh function
     def handle_search(self, client_sock, request_dict):
+        # trim input query
+        raw_query = request_dict.get("query", "").strip()
 
-        query = request_dict.get("query", "")
+
+        if not raw_query:
+            self._send_packet(client_sock, {"type": "error", "payload": "query_required"})
+            return
+
+        query_norm = raw_query.lower()
         filters = request_dict.get("filters", ["all"])
 
-        print(f"[SEARCH] Query: '{query}', Filters: {filters}")
+        print(f"[SEARCH] Raw Query: '{raw_query}'")
+
+        # extension detection
+        detected_video = False
+        detected_image = False
+
+
+        for ext in video_exts:
+            if query_norm.endswith(ext):
+                filters = ["video"]
+                detected_video = True
+                print(f"[SEARCH] Detected video extension '{ext}' -> Filter set to VIDEO")
+                break
+
+
+        if not detected_video:
+            for ext in image_exts:
+                if query_norm.endswith(ext):
+                    filters = ["image"]
+                    detected_image = True
+                    print(f"[SEARCH] Detected image extension '{ext}' -> Filter set to IMAGE")
+                    break
+
+
+        backend_req = {
+            "command": "list",
+            "filters": filters,
+            "path": "/"
+        }
+
+        # forward to relevant servers based on filters
+        servers_to_query = []
+        if "image" in filters or "all" in filters:
+            servers_to_query.append(server1)
+        if "video" in filters or "all" in filters:
+            servers_to_query.append(server2)
+
 
         final_response = {
-            "type": "search",
+            "type": "list",
             "payload": {
-                "files": [],
-                "directories": [],
-                "query": query
+                "name": "search_results",
+                "path": "search/",
+                "subdirectories": [],
+                "files": []
             }
         }
 
-        # search on per server basicly
-        servers_to_query = []
-        if "image" in filters or "all" in filters:
-            servers_to_query.append(("image", server1))
-        if "video" in filters or "all" in filters:
-            servers_to_query.append(("video", server2))
+        found_files = []
 
-        for server_type, server_addr in servers_to_query:
-            res = self.forward_json_request(server_addr, request_dict)
-            if res and res.get("type") == "search":
-                payload = res.get("payload", {})
+        for srv_addr in servers_to_query:
 
-                # Merge files
-                for file_info in payload.get("files", []):
-                    file_info["server_type"] = server_type
-                    file_info["server"] = f"{server_addr[0]}:{server_addr[1]}"
-                    final_response["payload"]["files"].append(file_info)
+            res = self.forward_json_request(srv_addr, backend_req)
 
-                # Merge directories
-                for dir_info in payload.get("directories", []):
-                    dir_info["server_type"] = server_type
-                    dir_info["server"] = f"{server_addr[0]}:{server_addr[1]}"
-                    final_response["payload"]["directories"].append(dir_info)
+            if res and res.get("type") == "list":
+                root_node = res.get("payload", {})
 
-        # totla results found
-        total_found = len(final_response["payload"]["files"]) + len(final_response["payload"]["directories"])
-        if total_found == 0:
-            self._send_packet(client_sock, {"type": "error", "payload": "file_not_found"})
-        else:
-            final_response["payload"]["total_found"] = total_found
-            self._send_packet(client_sock, final_response)
+                self._recursive_search(root_node, query_norm, found_files)
+
+
+        final_response["payload"]["files"] = found_files
+
+        print(f"[SEARCH] Found {len(found_files)} files matching '{raw_query}'")
+        self._send_packet(client_sock, final_response)
+
+    def _merge_directories(self, existing_list, new_list):
+        """
+        merge by directory name
+        """
+        dir_map = {d["name"]: d for d in existing_list}
+
+        for new_dir in new_list:
+            name = new_dir.get("name")
+            if name in dir_map:
+
+                existing_files = dir_map[name].get("files", [])
+                new_files = new_dir.get("files", [])
+                existing_files.extend(new_files)
+
+            else:
+                existing_list.append(new_dir)
+                dir_map[name] = new_dir
+
+        return existing_list
+    def _recursive_search(self, current_dir_node, query_norm, results_list):
+        for file_info in current_dir_node.get("files", []):
+            file_name = file_info.get("name", "").lower()
+            if query_norm in file_name:
+                results_list.append(file_info)
+
+        for subdir in current_dir_node.get("subdirectories", []):
+            self._recursive_search(subdir, query_norm, results_list)
 #info function
     def handle_info(self, client_sock, request_dict):
 
@@ -315,9 +346,9 @@ class Coordinator:
             elif command == 'search':
                 self.handle_search(client_sock, request)
 
-            # --- COMMAND: INFO ---
-            elif command == 'info':
-                self.handle_info(client_sock, request)
+            # # --- COMMAND: INFO ---
+            # elif command == 'info':
+            #     self.handle_info(client_sock, request)
 
             # --- UNKNOWN COMMAND ---
             else:
