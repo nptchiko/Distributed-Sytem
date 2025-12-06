@@ -3,13 +3,15 @@ import threading
 import json
 import sys
 import struct
+
 # Server addresses
-server1 = ("127.0.0.1", 8001) # Image server
-server2 = ("127.0.0.1", 8002) # Video server
+server1 = ("127.0.0.1", 9001)  # Image server
+server2 = ("127.0.0.1", 9002)  # Video server
 
 # format extensions
 video_exts = {".mp4", ".mkv", ".webm", ".flv", ".avi"}
 image_exts = {".jpg", ".jpeg", ".png", ".bmp", ".gif"}
+
 
 class Coordinator:
     def __init__(self, ip, port):
@@ -23,8 +25,8 @@ class Coordinator:
 
     def _send_packet(self, sock, data_dict):
         try:
-            json_bytes = json.dumps(data_dict).encode('utf-8')
-            header = stuct.pack('!I', len(json_bytes))
+            json_bytes = json.dumps(data_dict).encode("utf-8")
+            header = stuct.pack("!I", len(json_bytes))
             sock.sendall(header + json_bytes)
         except Exception as e:
             print(f"Error sending packet: {e}")
@@ -32,26 +34,30 @@ class Coordinator:
     def _recv_packet(self, sock):
         try:
             len_bytes = sock.recv(4)
-            if not len_bytes: return None
-            payload_len = struct.unpack('!I', len_bytes)[0]
+            if not len_bytes:
+                return None
+            payload_len = struct.unpack("!I", len_bytes)[0]
 
-            payload = b''
+            payload = b""
             while len(payload) < payload_len:
                 chunk = sock.recv(payload_len - len(payload))
-                if not chunk: return None
+                if not chunk:
+                    return None
                 payload += chunk
-            return json.loads(payload.decode('utf-8'))
+            return json.loads(payload.decode("utf-8"))
         except Exception as e:
             print(f"Error receiving packet: {e}")
             return None
+
     def _get_target_server_by_path(self, path):
-        ext = path[path.rfind('.'):].lower()
+        ext = path[path.rfind(".") :].lower()
         if ext in image_exts:
             return server1
         elif ext in video_exts:
             return server2
         else:
             return None
+
     def forward_json_request(self, server_address, request_dict):
         """Gửi request JSON tới server con và nhận lại JSON (Dùng cho List)"""
         try:
@@ -59,9 +65,7 @@ class Coordinator:
             s.settimeout(5)
             s.connect(server_address)
 
-
             self._send_packet(s, request_dict)
-
 
             response = self._recv_packet(s)
             s.close()
@@ -69,6 +73,7 @@ class Coordinator:
         except Exception as e:
             print(f"Error forwarding to {server_address}: {e}")
             return {"type": "error", "message": "Server offline"}
+
     def forward_request(self, server_address, request_dict):
 
         try:
@@ -99,20 +104,22 @@ class Coordinator:
 
             # 3. Đọc Header từ Backend -> Forward ngay cho Client
             len_bytes = srv_sock.recv(4)
-            if not len_bytes: return
+            if not len_bytes:
+                return
             client_sock.sendall(len_bytes)
 
             # 4. Đọc JSON từ Backend -> Forward ngay cho Client
-            json_len = struct.unpack('!I', len_bytes)[0]
+            json_len = struct.unpack("!I", len_bytes)[0]
             json_data = b""
             while len(json_data) < json_len:
                 chunk = srv_sock.recv(min(4096, json_len - len(json_data)))
-                if not chunk: break
+                if not chunk:
+                    break
                 json_data += chunk
             client_sock.sendall(json_data)
 
             # 5. Check xem Server ready?
-            resp = json.loads(json_data.decode('utf-8'))
+            resp = json.loads(json_data.decode("utf-8"))
             if resp.get("type") == "ready":
                 file_size = resp["payload"]["size"]
                 print(f"[PROXY] Streaming {file_size} bytes...")
@@ -121,7 +128,8 @@ class Coordinator:
                 received = 0
                 while received < file_size:
                     chunk = srv_sock.recv(min(8192, file_size - received))
-                    if not chunk: break
+                    if not chunk:
+                        break
                     client_sock.sendall(chunk)
                     received += len(chunk)
                 print("[PROXY] Transfer complete.")
@@ -132,22 +140,23 @@ class Coordinator:
             print(f"Download Proxy Error: {e}")
             try:
                 self._send_packet(client_sock, {"type": "error", "payload": str(e)})
-            except: pass
+            except:
+                pass
 
     def handle_client(self, client):
 
         try:
 
             request = self._recv_packet(client)
-            if not request: return
+            if not request:
+                return
 
             print(f"[REQUEST] {request}")
-            command = request.get('command')
-            filters = request.get('filters', [])
+            command = request.get("command")
+            filters = request.get("filters", [])
 
             # --- COMMAND: LIST ---
-            if command == 'list':
-
+            if command == "list":
 
                 final_response = {
                     "type": "list",
@@ -155,8 +164,8 @@ class Coordinator:
                         "name": "root",
                         "path": "/",
                         "subdirectories": [],
-                        "files": []
-                    }
+                        "files": [],
+                    },
                 }
 
                 # Helper query function
@@ -168,7 +177,9 @@ class Coordinator:
                         if "files" in data:
                             final_response["payload"]["files"].extend(data["files"])
                         if "subdirectories" in data:
-                            final_response["payload"]["subdirectories"].extend(data["subdirectories"])
+                            final_response["payload"]["subdirectories"].extend(
+                                data["subdirectories"]
+                            )
 
                 if "image" in filters or "all" in filters:
                     query_and_merge(server1)
@@ -179,12 +190,14 @@ class Coordinator:
                 self._send_packet(client, final_response)
 
             # --- COMMAND: DOWNLOAD ---
-            elif command == 'download':
+            elif command == "download":
                 self.handle_download_proxy(client, request)
 
             # --- UNKNOWN ---
             else:
-                self._send_packet(client, {"type": "error", "payload": "Unknown command"})
+                self._send_packet(
+                    client, {"type": "error", "payload": "Unknown command"}
+                )
 
         except Exception as e:
             print(f"Client Handle Error: {e}")
@@ -196,6 +209,7 @@ class Coordinator:
             client, addr = self.sock.accept()
 
             threading.Thread(target=self.handle_client, args=(client,)).start()
+
 
 if __name__ == "__main__":
 

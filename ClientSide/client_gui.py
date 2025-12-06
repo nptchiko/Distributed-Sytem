@@ -311,7 +311,7 @@ def main():
         try:
             path = int(sys.argv[3])
         except Exception:
-            path = DEFAULT_PATH    
+            path = DEFAULT_PATH
 
     app = App(host, port, path)
     app.mainloop()

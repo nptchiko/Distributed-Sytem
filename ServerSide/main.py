@@ -34,7 +34,7 @@ import time
 from typing import Dict, Tuple
 
 HOST = "0.0.0.0"
-PORT = 9000     #video
+PORT = 9000  # video
 # PORT = 9001   #image
 ENCODING = "utf-8"
 STORAGE_DIR = os.path.join(os.getcwd(), "storage")
@@ -294,7 +294,7 @@ def handle_delete(sock: socket.socket, payload: dict):
     if not name:
         _send_control(sock, {"type": "error", "payload": "Missing name for delete"})
         return
-    
+
     # safe_name = os.path.basename(name)
     # path = os.path.join(STORAGE_DIR, safe_name)
     try:
@@ -302,7 +302,7 @@ def handle_delete(sock: socket.socket, payload: dict):
     except ValueError:
         _send_control(sock, {"type": "error", "payload": "Invalid path"})
         return
-    
+
     if not os.path.exists(path):
         _send_control(sock, {"type": "error", "payload": "file_not_found"})
         return
@@ -318,13 +318,13 @@ def handle_delete(sock: socket.socket, payload: dict):
 
 def _safe_path(requested_path):
 
-    safe_path = requested_path.lstrip('/')
+    safe_path = requested_path.lstrip("/")
 
     full_path = os.path.join(STORAGE_DIR, safe_path)
 
     real_path = os.path.realpath(full_path)
 
-    if os.path.commonpath([real_path, STORAGE_DIR]) == STORAGE_DIR: 
+    if os.path.commonpath([real_path, STORAGE_DIR]) == STORAGE_DIR:
         return real_path
     raise ValueError("Invalid path")
 
@@ -340,10 +340,10 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
             print(f"-> Json requested: {jsonData}")
             jsonData = json.loads(jsonData)
 
-            if  jsonData is None:
+            if jsonData is None:
                 print("error")
                 break
-            
+
             command = jsonData.get("command")
             payload = jsonData.get("payload")
             # path = jsonData.get("path")
@@ -358,16 +358,16 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
             except ValueError as e:
                 _send_control(client_sock, {"type": "error", "payload": str(e)})
                 break
-            
+
             if payload is None:
                 payload = {}
-            
+
             if path is None:
                 path = STORAGE_DIR
 
             if filters is None:
                 filters = ["all"]
-            
+
             print(f"path requested: {path}")
 
             # ctrl = _recv_control(client_sock)
@@ -377,7 +377,9 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
             # payload = ctrl.get("payload")
             if command == "list":
                 if not os.path.isdir(path):
-                    _send_control(client_sock, {"type": "error", "payload": "file_not_found"})
+                    _send_control(
+                        client_sock, {"type": "error", "payload": "file_not_found"}
+                    )
                     continue
 
                 files = load_directory(path, filters)
