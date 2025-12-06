@@ -322,11 +322,11 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
     print(f"New client: {addr}")
     try:
         while True:
-            data = client_sock.recv(4096)
-            jsonData = data.decode(ENCODING)
-            print(f"-> Json requested: {jsonData}")
-            jsonData = json.loads(jsonData)
-
+            # data = client_sock.recv(4096)
+            # jsonData = data.decode(ENCODING)
+            # print(f"-> Json requested: {jsonData}")
+            # jsonData = json.loads(jsonData)
+            jsonData = _recv_control(client_sock)
             if  jsonData is None:
                 print("error")
                 break
