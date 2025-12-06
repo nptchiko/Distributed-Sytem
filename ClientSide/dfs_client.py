@@ -77,7 +77,6 @@ class DFSClient:
         try:
             return json.loads(payload.decode(ENCODING))
         except Exception as e:
-            return "Not found"
             raise DFSProtocolError("Invalid control JSON") from e
 
     def _send_control(self, obj: Dict[str, Any]):
@@ -89,7 +88,12 @@ class DFSClient:
     # agruemnt: filter
     # example: "all", "image", "video"
     def list_files(self, filter: Optional[str] = None):
-        self._send_control({"command": "list", "filters": filter, "path": self.path})
+        self._send_control(
+            {
+                "command": "list",
+                "payload": {"filters": filter, "path": self.path},
+            }
+        )
         return self._recv_control()
 
     def ping(self):
@@ -108,6 +112,7 @@ class DFSClient:
     def upload_file(
         self, local_path: str, remote_name: Optional[str] = None, progress_callback=None
     ):
+        assert self.sock is not None
         if not os.path.exists(local_path) or not os.path.isfile(local_path):
             raise FileNotFoundError(local_path)
         size = os.path.getsize(local_path)
@@ -158,14 +163,15 @@ class DFSClient:
     # Example: {"command": "download", "payload": {"name": "/home/public/Documents/a.jpg", "filter": "image"}}
     def download_file(self, remote_name: str, local_path: str, progress_callback=None):
         if not os.path.exists(os.path.dirname(local_path)):
-            os.makedirs(os.path.dirname(local_path))    
+            os.makedirs(os.path.dirname(local_path))
         # send control
         self._send_control({
-            "command": "download", 
-            "payload": {
-                "path": f"{self.path}{remote_name}"
-                }, 
-            "filter": _filter(remote_name)})
+            "command": "download",
+            "payload": { 
+                "path": f"{self.path}{remote_name}",
+                "filter": _filter(remote_name)
+            }
+        })
         ready = self._recv_control()
         if not ready:
             raise DFSProtocolError("No response from server")
@@ -198,3 +204,35 @@ class DFSClient:
             "command": "download_result",
             "payload": {"ok": True, "size": size, "sha256": actual_sha},
         }
+
+    def preview_file(self, remote_name: str):
+        self._send_control({
+            "command": "preview",
+            "payload": {
+                "path": f"{self.path}{remote_name}",
+                "filter": _filter(remote_name)
+            }
+        })
+
+        ready = self._recv_control()
+        if not ready:
+            raise DFSProtocolError("No response from server")
+        if ready.get("command") == "error":
+            return ready, None
+
+        if ready.get("command") != "ready":
+            raise DFSProtocolError(f"Unexpected control reply: {ready}")
+
+        size = int(ready["payload"]["size"])
+        file_type = ready["payload"]["type"]
+
+        data = self._recv_all(size)
+        return data, file_type
+
+def _filter(remote_name: str):
+    if remote_name.endswith((".jpg", ".jpeg", ".png", ".gif")):
+        return "image"
+    elif remote_name.endswith((".txt", ".md", ".py", ".json", ".xml")):
+        return "text"
+    else:
+        return "binary"
