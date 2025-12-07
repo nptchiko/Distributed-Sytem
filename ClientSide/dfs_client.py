@@ -165,7 +165,7 @@ class DFSClient:
             "payload": {
                 "path": f"{self.path}{remote_name}"
                 }, 
-            "filter": _filter(remote_name)})
+            "filter": self._filter(remote_name)})
         ready = self._recv_control()
         if not ready:
             raise DFSProtocolError("No response from server")

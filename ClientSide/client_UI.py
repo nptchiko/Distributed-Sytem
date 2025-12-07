@@ -410,6 +410,7 @@ class FileClientApp:
         self.log_msg(f"Starting download: {file_name} -> {local_path}")
         def work():
             try:
+                import os
                 directory = os.path.dirname(local_path)
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory)
