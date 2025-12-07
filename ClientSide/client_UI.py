@@ -230,14 +230,14 @@ class FileClientApp:
 
         def work():
             try:
-                # Khởi tạo client mới với thông số từ UI
+                # Init client and connect
                 self.client = DFSClient(host, port)
                 self.client.connect(timeout=5)
                 
-                # Cập nhật UI trong main thread
+                # update UI on main thread
                 self.root.after(0, lambda: self._connect_success(host, port))
                 
-                # Tự động load danh sách file sau khi kết nối
+                # Initial file list refresh
                 self.refresh_list()
                 
             except Exception as e:
@@ -277,30 +277,71 @@ class FileClientApp:
         self.set_status("Disconnected")
         self.log_msg("Disconnected")
 
+    def _get_active_filters(self):
+        """Chuyển đổi trạng thái checkbox thành list filters cho server"""
+        filters = []
+        if self.check_vars["All files"].get():
+            filters.append("all")
+        if self.check_vars["Image files"].get():
+            filters.append("image")
+        if self.check_vars["Video files"].get():
+            filters.append("video")
+        
+        # Nếu không chọn gì cả, mặc định là all
+        if not filters:
+            filters = ["all"]
+        return filters
+
     def on_send_click(self):
-        pass
+        """Nút Send Request: Thực chất là gửi lệnh List với các Filter đã chọn"""
+        if not self.is_connected:
+            messagebox.showwarning("Warning", "Please connect to server first.")
+            return
+        self.refresh_list()
 
     # ---- File operations ----
     def refresh_list(self):
+        if not self.is_connected: return
+
+        filters = self._get_active_filters()
+        self.log_msg(f"Requesting list. Filters: {filters}")
+
         def work():
             try:
-                resp = self.client.list_files()
-                if resp.get("command") == "list":
-                    files = resp.get("payload", [])
-                    self.tree.delete(*self.tree.get_children())
-                    for f in files:
-                        name = f.get("name")
-                        size = f.get("size")
-                        sha = f.get("sha256")
-                        self.tree.insert("", "end", values=(name, size, sha))
-                    self.log_msg("File list refreshed")
+                # Call list_files with filters
+                resp = self.client.list_files(filter=filters)
+                
+                if resp and resp.get("type") == "list": # Server returned file list
+                    files = resp["payload"].get("files", [])
+                    # Update treeview on main thread
+                    self.root.after(0, lambda: self._update_treeview(files))
+                elif resp and resp.get("type") == "error":
+                    msg = resp.get("payload")
+                    self.root.after(0, lambda: self.log_msg(f"Server Error: {msg}"))
                 else:
-                    self.log_msg(f"Unexpected list response: {resp}")
+                    self.root.after(0, lambda: self.log_msg(f"Unknown response: {resp}"))
+
             except Exception as e:
-                self.log_msg(f"Refresh failed: {e}")
+                self.root.after(0, lambda: self.log_msg(f"List failed: {e}"))
 
         threading.Thread(target=work, daemon=True).start()
 
+    def _update_treeview(self, files):
+        self.tree.delete(*self.tree.get_children())
+        if not files:
+            self.log_msg("No files found.")
+            return
+            
+        for i, f in enumerate(files):
+            name = f.get("name", "Unknown")
+            size = f.get("size", 0)
+            sha = f.get("sha256", "")
+            
+            tag = 'odd' if i % 2 != 0 else 'even'
+            # Insert vào treeview
+            self.tree.insert("", "end", text=name, values=(size, sha), tags=(tag,))
+        
+        self.log_msg(f"Updated list with {len(files)} files.")
 
     def on_download_click(self):
         pass

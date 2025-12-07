@@ -34,7 +34,7 @@ class DFSProtocolError(Exception):
 
 class DFSClient:
     def __init__(
-        self, host: str = "127.0.0.1", port: int = 9000, path: str = "/home/public/Documents/", bufsize: int = DEFAULT_BUFSIZE
+        self, host: str = "127.0.0.1", port: int = 9000, path: str = "./", bufsize: int = DEFAULT_BUFSIZE
     ):
         self.host = host
         self.port = port
