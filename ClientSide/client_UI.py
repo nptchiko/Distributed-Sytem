@@ -305,7 +305,7 @@ class FileClientApp:
         self.set_status("Disconnected")
         self.log_msg("Disconnected")
 
-    # Author: Quang Minh
+    # Author: Quang Minh,Huy
     # Function: _get_active_filters
     # Description:
     def _get_active_filters(self):
@@ -317,22 +317,17 @@ class FileClientApp:
             filters.append("image")
         if self.check_vars["Video files"].get():
             filters.append("video")
-        
+        if self.check_vars["Sound files"].get():
+            filters.append("sound")
+        if self.check_vars["Text files"].get():
+            filters.append("text")
+        if self.check_vars["Compressed files"].get():
+            filters.append("compressed")
         # Nếu không chọn gì cả, mặc định là all
         if not filters:
             filters = ["all"]
         return filters
 
-    # ---- Request actions ----
-    # Author: Quang Minh
-    # Function: on_send_click
-    # Description: Handle Send Request button click
-    def on_send_click(self):
-        """Nút Send Request: Thực chất là gửi lệnh List với các Filter đã chọn"""
-        if not self.is_connected:
-            messagebox.showwarning("Warning", "Please connect to server first.")
-            return
-        self.refresh_list()
 
     # ---- File operations ----
     # Author: Quang Minh
@@ -383,6 +378,14 @@ class FileClientApp:
             self.tree.insert("", "end", text=name, values=(size, sha), tags=(tag,))
         
         self.log_msg(f"Updated list with {len(files)} files.")
+    #Author: Huy
+    #Function : on_send_click
+    #Description: Gửi yêu cầu lấy danh sách file với bộ lọc  
+    def on_send_click(self):
+        if not self.is_connected:
+            messagebox.showwarning("Warning", "Hãy kết nối với sever.")
+            return
+        self.refresh_list()
         
     # Author: Ngoc Huy
     # Function: on_download_click
