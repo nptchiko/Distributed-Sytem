@@ -34,7 +34,11 @@ class DFSProtocolError(Exception):
 
 class DFSClient:
     def __init__(
-        self, host: str = "127.0.0.1", port: int = 9000, path: str = "/home/public/Documents/", bufsize: int = DEFAULT_BUFSIZE
+        self,
+        host: str = "127.0.0.1",
+        port: int = 9000,
+        path: str = "",
+        bufsize: int = DEFAULT_BUFSIZE,
     ):
         self.host = host
         self.port = port
@@ -87,11 +91,12 @@ class DFSClient:
     # author: Quang Minh
     # agruemnt: filter
     # example: "all", "image", "video"
-    def list_files(self, filter: Optional[str] = None):
+    def list_files(self, filter: list[str]):
         self._send_control(
             {
                 "command": "list",
-                "payload": {"filters": filter, "path": self.path},
+                "filters": filter or [],
+                "path": self.path,
             }
         )
         return self._recv_control()
@@ -101,12 +106,9 @@ class DFSClient:
         return self._recv_control()
 
     def delete_file(self, remote_name: str):
-        self._send_control({
-                "command": "delete", 
-                "payload": {
-                    "path": f"{self.path}{remote_name}"
-                }
-            })
+        self._send_control(
+            {"command": "delete", "payload": {"path": f"{self.path}{remote_name}"}}
+        )
         return self._recv_control()
 
     def upload_file(
@@ -127,7 +129,10 @@ class DFSClient:
         name = remote_name or os.path.basename(local_path)
         # Send control
         self._send_control(
-            {"command": "upload", "payload": {"name": name, "size": size, "sha256": sha}}
+            {
+                "command": "upload",
+                "payload": {"name": name, "size": size, "sha256": sha},
+            }
         )
         ready = self._recv_control()
         if not ready or ready.get("command") != "ready":
@@ -165,13 +170,15 @@ class DFSClient:
         if not os.path.exists(os.path.dirname(local_path)):
             os.makedirs(os.path.dirname(local_path))
         # send control
-        self._send_control({
-            "command": "download",
-            "payload": { 
-                "path": f"{self.path}{remote_name}",
-                "filter": _filter(remote_name)
+        self._send_control(
+            {
+                "command": "download",
+                "payload": {
+                    "path": f"{self.path}{remote_name}",
+                    "filter": _filter(remote_name),
+                },
             }
-        })
+        )
         ready = self._recv_control()
         if not ready:
             raise DFSProtocolError("No response from server")
@@ -206,13 +213,15 @@ class DFSClient:
         }
 
     def preview_file(self, remote_name: str):
-        self._send_control({
-            "command": "preview",
-            "payload": {
-                "path": f"{self.path}{remote_name}",
-                "filter": _filter(remote_name)
+        self._send_control(
+            {
+                "command": "preview",
+                "payload": {
+                    "path": f"{self.path}{remote_name}",
+                    "filter": _filter(remote_name),
+                },
             }
-        })
+        )
 
         ready = self._recv_control()
         if not ready:
@@ -228,6 +237,7 @@ class DFSClient:
 
         data = self._recv_all(size)
         return data, file_type
+
 
 def _filter(remote_name: str):
     if remote_name.endswith((".jpg", ".jpeg", ".png", ".gif")):

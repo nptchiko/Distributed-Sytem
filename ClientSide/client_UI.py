@@ -56,20 +56,21 @@ class FileClientApp:
         if ext in [".jpg", ".jpeg", ".png", ".gif"]:
             return self.icons.get("image")
 
-        if ext in ["mp4", "mkv", "webm", "flv"]:
+        if ext in [".mp4", ".mkv", ".webm", ".flv"]:
             return self.icons.get("video")
 
-        if ext in ["mp3", "m4p", "m4a", "flac"]:
+        if ext in [".mp3", ".m4p", ".m4a", ".flac"]:
             return self.icons.get("sound")
 
-        if ext in ["txt", "pdf", "doc", "docx"]:
+        if ext in [".txt", ".pdf", ".doc", ".docx"]:
             return self.icons.get("docs")
 
-        if ext in ["rar", "zip"]:
+        if ext in [".rar", ".zip"]:
             return self.icons.get("zip")
         # Add more rules here for video, text, etc.
         return self.icons.get("file")
 
+    # Author: Tien
     #### EXAMPLE
     #    {
     #   "name": "storage",
@@ -106,7 +107,7 @@ class FileClientApp:
 
         name = data.get("name")
         path = data.get("path")
-        subdir = data.get("subdirectories")
+        subdir: list = data.get("subdirectories")
         files: list = data.get("files")
 
         directory_icon = self.icons.get("folder")
@@ -118,17 +119,15 @@ class FileClientApp:
 
         node = self.tree.insert(parent, "end", **directory_node)
 
+        if subdir is not []:
+            for dir in subdir:
+                self.populate_tree(node, dir)
+
         for file in files:
             file_name = file.get("name") or "Untitled"
             file_path = file.get("path")
 
-            keyword = "ServerSide/"
-            if keyword in file_path:
-                # Tách chuỗi làm 2 phần và lấy phần phía sau
-                result = file_path.split(keyword)[1]
-                file_path = result
-
-            file_icon = self._get_icon(file_path)
+            file_icon = self._get_icon(file_name)
 
             file_node = {"text": " " + file_name, "image": file_icon}
             self.tree.insert(node, tk.END, **file_node)
@@ -449,27 +448,6 @@ class FileClientApp:
             target=self._execute_upload, args=(local_path, remote_name), daemon=True
         ).start()
 
-    def _build_file_tree(self, file_list):
-        tree = {}
-        for path in file_list:
-            parts = path.split("/")
-            current_level = tree
-            for part in parts:
-                if part not in current_level:
-                    current_level[part] = {}
-                current_level = current_level[part]
-
-        def to_list(d):
-            result = []
-            for name, children in d.items():
-                node = {"name": name}
-                if children:
-                    node["children"] = to_list(children)
-                result.append(node)
-            return result
-
-        return to_list(tree)
-
     def on_refresh_click(self):
         if not self.is_connected:
             messagebox.showwarning(
@@ -485,11 +463,13 @@ class FileClientApp:
             # Fetch file list from server
             if not self.client:
                 return
-            file_list = self.client.list_files()
+            file_list = self.client.list_files(["all"])
 
             # Build hierarchical tree data
             if file_list["payload"] is None:
+
                 return
+            messagebox.showinfo("DEBUG", file_list["payload"])
             self.populate_tree("", file_list["payload"])
 
         except Exception as e:
