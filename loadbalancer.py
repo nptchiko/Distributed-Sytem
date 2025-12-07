@@ -312,8 +312,8 @@ class Coordinator:
                 final_response = {
                     "type": "list",
                     "payload": {
-                        "name": "root",
-                        "path": request.get("path", "/"),
+                        "name": "storage",
+                        "path": request.get("path"),
                         "subdirectories": [],
                         "files": [],
                     },
