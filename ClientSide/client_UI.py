@@ -27,17 +27,14 @@ class FileClientApp:
 
         self.client_socket = None
         self.is_connected = False
-
+        
         self.colors = {
-            "primary": "#2c3e50",
-            "secondary": "#ecf0f1",
-            "accent": "#3498db",
-            "text": "#2c3e50",
-            "white": "#ffffff",
+            "primary": "#2c3e50",    
+            "secondary": "#ecf0f1",  
+            "accent": "#3498db",     
+            "text": "#2c3e50",       
+            "white": "#ffffff"
         }
-
-        # Placeholder for the current preview image to prevent garbage collection
-        self.current_image = None
 
         self.setup_styles()
         self.create_layout()
@@ -87,7 +84,7 @@ class FileClientApp:
         header_frame = tk.Frame(self.root, bg=self.colors["primary"], height=80)
         header_frame.pack(side="top", fill="x")
         header_frame.pack_propagate(False)
-
+        
         lbl_title = ttk.Label(header_frame, text="CLIENT UI", style="Header.TLabel")
         lbl_title.pack(side="left", padx=20, pady=20)
 
@@ -105,8 +102,10 @@ class FileClientApp:
         body_frame = ttk.Frame(self.root, padding=20)
         body_frame.pack(fill="both", expand=True)
 
+
         left_frame = ttk.Frame(body_frame)
         left_frame.pack(side="left", fill="both", expand=True, padx=(0, 20))
+
 
         input_card = ttk.Frame(left_frame, style="Card.TFrame", padding=15)
         input_card.pack(fill="x", pady=(0, 15))
@@ -134,44 +133,38 @@ class FileClientApp:
         
         self.entry_req = ttk.Entry(req_sub_frame)
         self.entry_req.pack(side="left", fill="x", expand=True)
-        ttk.Button(
-            req_sub_frame, text="Browse", width=8, command=self.browse_folder
-        ).pack(side="right", padx=(5, 0))
+        ttk.Button(req_sub_frame, text="Browse", width=8, command=self.browse_folder).pack(side="right", padx=(5, 0))
+
 
         action_frame = ttk.Frame(input_card, style="Card.TFrame")
         action_frame.grid(row=4, column=1, sticky="w", padx=10, pady=10)
         ttk.Button(action_frame, text="SEND REQUEST", command=self.on_send_click).pack(side="left", padx=(0, 5))
         ttk.Button(action_frame, text="DOWNLOAD", command=self.on_download_click).pack(side="left")
 
-        ttk.Label(
-            left_frame, text="File Response List", font=("Segoe UI", 11, "bold")
-        ).pack(anchor="w", pady=(0, 5))
 
+        ttk.Label(left_frame, text="File Response List", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 5))
+        
         tree_frame = ttk.Frame(left_frame)
         tree_frame.pack(fill="both", expand=True)
-
+        
         tree_scroll = ttk.Scrollbar(tree_frame)
         self.tree = ttk.Treeview(tree_frame, yscrollcommand=tree_scroll.set, height=10)
         tree_scroll.config(command=self.tree.yview)
-
+        
         self.tree.pack(side="left", fill="both", expand=True)
         tree_scroll.pack(side="right", fill="y")
+        
         self.tree.heading("#0", text="Folder / File Name", anchor="w")
 
-        # --- NEW: Bind Click Event to Treeview ---
-        self.tree.bind("<<TreeviewSelect>>", self.on_file_select)
+        self.tree.tag_configure('odd', background='#f8f9fa')
+        self.tree.tag_configure('even', background='#ffffff')
 
-        # --- RIGHT FRAME (Modified for Preview) ---
+
         right_frame = ttk.Frame(body_frame, style="Card.TFrame", padding=15)
         right_frame.pack(side="right", fill="y", anchor="n")
 
-        ttk.Label(
-            right_frame,
-            text="Filter Options",
-            font=("Segoe UI", 12, "bold"),
-            background="white",
-        ).pack(anchor="w", pady=(0, 15))
-
+        ttk.Label(right_frame, text="Filter Options", font=("Segoe UI", 12, "bold"), background="white").pack(anchor="w", pady=(0, 15))
+        
         self.check_vars = {}
         options = ["All files", "Image files", "Video files","Text files","Sound files","Compressed files"]
         
@@ -231,19 +224,11 @@ class FileClientApp:
     # Function: create_toolbar_btn
     # Description: Create a toolbar button with icon and text
     def create_toolbar_btn(self, parent, text, icon, cmd):
-        btn = tk.Button(
-            parent,
-            text=f"{icon}  {text}",
-            command=cmd,
-            bg="#34495e",
-            fg="white",
-            bd=0,
-            padx=15,
-            pady=5,
-            activebackground="#2c3e50",
-            activeforeground="white",
-            font=("Segoe UI", 9, "bold"),
-        )
+        btn = tk.Button(parent, text=f"{icon}  {text}", command=cmd, 
+                        bg="#34495e", fg="white", 
+                        bd=0, padx=15, pady=5, 
+                        activebackground="#2c3e50", activeforeground="white",
+                        font=("Segoe UI", 9, "bold"))
         btn.pack(side="left", padx=5)
         return btn
 
@@ -442,6 +427,32 @@ class FileClientApp:
                 self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to download file:\n{str(e)}"))
         threading.Thread(target=work, daemon=True).start()
 
+        local_path = filedialog.asksaveasfilename(
+            title="Save File",
+            initialfile=file_name,
+            defaultextension=".*"
+        )
+
+        if not local_path:
+            return
+        self.log_msg(f"Starting download: {file_name} -> {local_path}")
+        def work():
+            try:
+                directory = os.path.dirname(local_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory)
+                    self.root.after(0, lambda: self.log_msg(f"Created directory: {directory}"))
+                self.client.download_file(file_name, local_path)
+
+                # Cập nhật UI khi thành công
+                self.root.after(0, lambda: self.log_msg(f"Download success: {file_name}"))
+                self.root.after(0, lambda: messagebox.showinfo("Success", f"File downloaded successfully to:\n{local_path}"))
+
+            except Exception as e:
+                # Cập nhật UI khi lỗi
+                self.root.after(0, lambda: self.log_msg(f"Download failed: {str(e)}"))
+                self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to download file:\n{str(e)}"))
+        threading.Thread(target=work, daemon=True).start()
 
 if __name__ == "__main__":
     root = tk.Tk()

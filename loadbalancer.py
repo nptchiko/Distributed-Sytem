@@ -28,6 +28,7 @@ class Coordinator:
     def _send_packet(self, sock, data_dict):
         try:
             json_bytes = json.dumps(data_dict).encode('utf-8')
+            # Quang minh ghi nhé: stuct -> struct :))
             header = struct.pack('!I', len(json_bytes))
             sock.sendall(header + json_bytes)
         except Exception as e:
