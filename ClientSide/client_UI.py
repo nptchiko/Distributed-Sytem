@@ -40,20 +40,46 @@ class FileClientApp:
         self.create_layout()
 
     def setup_styles(self):
+        # ... (Your existing styles code remain exactly the same) ...
         style = ttk.Style()
         style.theme_use("clam")
 
         style.configure("TFrame", background=self.colors["secondary"])
-        style.configure("TLabel", background=self.colors["secondary"], foreground=self.colors["text"], font=("Segoe UI", 10))
+        style.configure(
+            "TLabel",
+            background=self.colors["secondary"],
+            foreground=self.colors["text"],
+            font=("Segoe UI", 10),
+        )
         style.configure("TButton", font=("Segoe UI", 10), padding=6)
-        style.configure("Header.TLabel", background=self.colors["primary"], foreground=self.colors["white"], font=("Segoe UI", 20, "bold"))
+        style.configure(
+            "Header.TLabel",
+            background=self.colors["primary"],
+            foreground=self.colors["white"],
+            font=("Segoe UI", 20, "bold"),
+        )
         style.configure("Card.TFrame", background=self.colors["white"], relief="flat")
-        style.configure("Treeview", font=("Segoe UI", 10), rowheight=25, background="white", fieldbackground="white")
-        style.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"), background="#bdc3c7", foreground=self.colors["text"])
-        
-        style.map("TButton", background=[("active", self.colors["accent"]), ("!disabled", "#bdc3c7")])
+        style.configure(
+            "Treeview",
+            font=("Segoe UI", 10),
+            rowheight=25,
+            background="white",
+            fieldbackground="white",
+        )
+        style.configure(
+            "Treeview.Heading",
+            font=("Segoe UI", 10, "bold"),
+            background="#bdc3c7",
+            foreground=self.colors["text"],
+        )
+        style.map(
+            "TButton",
+            background=[("active", self.colors["accent"]), ("!disabled", "#bdc3c7")],
+        )
 
     def create_layout(self):
+        # ... (Keep Header and Left Frame code exactly the same until 'File Response List') ...
+
         # --- HEADER ---
         header_frame = tk.Frame(self.root, bg=self.colors["primary"], height=80)
         header_frame.pack(side="top", fill="x")
@@ -85,7 +111,9 @@ class FileClientApp:
         input_card.pack(fill="x", pady=(0, 15))
         input_card.columnconfigure(1, weight=1)
 
-        ttk.Label(input_card, text="Status:", background="white").grid(row=0, column=0, sticky="w", pady=5)
+        ttk.Label(input_card, text="Status:", background="white").grid(
+            row=0, column=0, sticky="w", pady=5
+        )
         self.entry_status = ttk.Entry(input_card, width=20)
         self.entry_status.insert(0, "Disconnected")
         self.entry_status.config(state="readonly")
@@ -359,10 +387,13 @@ class FileClientApp:
     def on_download_click(self):
         pass
 
+
 if __name__ == "__main__":
     root = tk.Tk()
-    try: root.tk.call('tk', 'scaling', 1.5) 
-    except: pass
-    
+    try:
+        root.tk.call("tk", "scaling", 1.5)
+    except:
+        pass
+
     app = FileClientApp(root)
     root.mainloop()
