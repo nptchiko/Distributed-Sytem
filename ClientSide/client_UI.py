@@ -1,15 +1,29 @@
+# This is new UI client code with improved structure and features.
+# Designed by Ngoc Huy
+# Imported and modified logic by Quang Minh   
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageTk  # <--- NEW: Required for images
-import io
-import threading  # <--- NEW: To keep UI responsive
+from dfs_client import DFSClient, DFSProtocolError
+import threading
+import time
 
+
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 9000
+DEFAULT_PATH = "./"
 
 class FileClientApp:
-    def __init__(self, root):
+    def __init__(self, root, host=DEFAULT_HOST, port=DEFAULT_PORT, path=DEFAULT_PATH):
         self.root = root
         self.root.title("UI Client")
-        self.root.geometry("1000x700")  # Slightly wider for preview
+        self.root.geometry("900x650")
+        
+        self.host = host
+        self.port = port
+        self.path = path
+        self.client = DFSClient(self.host, self.port)
+        self.worker_lock = threading.Lock()
 
         self.client_socket = None
         self.is_connected = False
@@ -79,10 +93,14 @@ class FileClientApp:
 
         toolbar_frame = tk.Frame(header_frame, bg=self.colors["primary"])
         toolbar_frame.pack(side="right", padx=20)
-
-        self.create_toolbar_btn(toolbar_frame, "Connect", "▶", self.on_connect_click)
-        self.create_toolbar_btn(toolbar_frame, "Refresh", "⟳", self.on_refresh_click)
+        
+        self.btn_connect = self.create_toolbar_btn(toolbar_frame, "Connect", "▶", self.on_connect)
+        self.btn_disconnect = self.create_toolbar_btn(toolbar_frame, "Disconnect", "■", self.on_disconnect)
+        self.btn_disconnect.config(state="disabled")
+        self.create_toolbar_btn(toolbar_frame, "Refresh", "⟳", self.refresh_list)
         self.create_toolbar_btn(toolbar_frame, "Exit", "✖", self.root.quit)
+
+        # --- BODY ---
 
         body_frame = ttk.Frame(self.root, padding=20)
         body_frame.pack(fill="both", expand=True)
@@ -102,18 +120,18 @@ class FileClientApp:
         self.entry_status.config(state="readonly")
         self.entry_status.grid(row=0, column=1, sticky="w", padx=10)
 
-        ttk.Label(input_card, text="Host IP:", background="white").grid(
-            row=1, column=0, sticky="w", pady=5
-        )
-        self.entry_host = ttk.Entry(input_card)
-        self.entry_host.grid(row=1, column=1, sticky="ew", padx=10)
+        ttk.Label(input_card, text="Host IP:", background="white").grid(row=1, column=0, sticky="w", pady=5)
+        self.host_var_entry = ttk.Entry(input_card)
+        self.host_var_entry.grid(row=1, column=1, sticky="ew", padx=10)
 
-        ttk.Label(input_card, text="Request:", background="white").grid(
-            row=2, column=0, sticky="w", pady=5
-        )
+        ttk.Label(input_card, text="Port:", background="white").grid(row=2, column=0, sticky="w", pady=5)
+        self.port_var_entry = ttk.Entry(input_card)
+        self.port_var_entry.grid(row=2, column=1, sticky="ew", padx=10)
+
+        ttk.Label(input_card, text="Request:", background="white").grid(row=3, column=0, sticky="w", pady=5)
         req_sub_frame = ttk.Frame(input_card, style="Card.TFrame")
-        req_sub_frame.grid(row=2, column=1, sticky="ew", padx=10)
-
+        req_sub_frame.grid(row=3, column=1, sticky="ew", padx=10)
+        
         self.entry_req = ttk.Entry(req_sub_frame)
         self.entry_req.pack(side="left", fill="x", expand=True)
         ttk.Button(
@@ -121,13 +139,9 @@ class FileClientApp:
         ).pack(side="right", padx=(5, 0))
 
         action_frame = ttk.Frame(input_card, style="Card.TFrame")
-        action_frame.grid(row=3, column=1, sticky="w", padx=10, pady=10)
-        ttk.Button(action_frame, text="SEND REQUEST", command=self.on_send_click).pack(
-            side="left", padx=(0, 5)
-        )
-        ttk.Button(action_frame, text="DOWNLOAD", command=self.on_download_click).pack(
-            side="left"
-        )
+        action_frame.grid(row=4, column=1, sticky="w", padx=10, pady=10)
+        ttk.Button(action_frame, text="SEND REQUEST", command=self.on_send_click).pack(side="left", padx=(0, 5))
+        ttk.Button(action_frame, text="DOWNLOAD", command=self.on_download_click).pack(side="left")
 
         ttk.Label(
             left_frame, text="File Response List", font=("Segoe UI", 11, "bold")
@@ -159,50 +173,63 @@ class FileClientApp:
         ).pack(anchor="w", pady=(0, 15))
 
         self.check_vars = {}
-        options = ["All files", "Image files", "Video files"]
+        options = ["All files", "Image files", "Video files","Text files","Sound files","Compressed files"]
+        
         for opt in options:
             var = tk.IntVar()
-            if opt == "All files":
-                var.set(1)
-            chk = ttk.Checkbutton(
-                right_frame, text=opt, variable=var, style="TCheckbutton"
-            )
-            chk.pack(fill="x", pady=8, anchor="w")
+            if opt == "All files": var.set(1)
+            chk = ttk.Checkbutton(right_frame, text=opt, variable=var, style="TCheckbutton")
+
+            style = ttk.Style()
+            style.configure("TCheckbutton", background="white", font=("Segoe UI", 10))
+            chk.pack(fill="x", pady=2, anchor="w")
             self.check_vars[opt] = var
 
-        style = ttk.Style()
-        style.configure("TCheckbutton", background="white", font=("Segoe UI", 10))
+        ttk.Separator(right_frame, orient='horizontal').pack(fill='x', pady=(10,5))
+        
+        ttk.Label(right_frame, text="Custom Extensions:", background="white").pack(anchor="w", pady=(0, 5))
+        self.entry_ext = ttk.Entry(right_frame)
+        self.entry_ext.pack(fill="x")
+        ttk.Label(right_frame, text="(e.g. .pnj; .pdf)", font=("Segoe UI", 8, "italic"), background="white", foreground="#7f8c8d").pack(anchor="w")
 
-        ttk.Separator(right_frame, orient="horizontal").pack(fill="x", pady=20)
+        # Log Box Area
+        ttk.Label(right_frame, text="System Log:", font=("Segoe UI", 10, "bold"), background="white").pack(anchor="w")
+        self.log_text = tk.Text(right_frame, height=15, width=30, font=("Consolas", 8))
+        self.log_text.pack(fill="both", expand=True, pady=(5,0))
+        self.log_text.config(state="disabled")
 
-        # --- NEW: PREVIEW SECTION ---
-        ttk.Label(
-            right_frame,
-            text="File Preview",
-            font=("Segoe UI", 12, "bold"),
-            background="white",
-        ).pack(anchor="w", pady=(0, 10))
+    # ---- UI helpers ----
+    # Author: Quang Minh
+    # Function: log_msg
+    # Description: Log a message to the log text area with timestamp
+    def log_msg(self, s: str):
+        self.log_text.configure(state="normal")
+        ts = time.strftime("%H:%M:%S")
+        self.log_text.insert("end", f"[{ts}] {s}\n")
+        self.log_text.see("end")
+        self.log_text.configure(state="disabled")
 
-        self.preview_container = tk.Frame(
-            right_frame, bg="white", height=250, width=250
-        )
-        self.preview_container.pack(fill="x")
-        self.preview_container.pack_propagate(False)  # Force size
+    # Author: Quang Minh
+    # Function: browse_folder
+    # Description: Open a dialog to browse folder and set the path to entry_req
+    def set_status(self, s: str):
+        self.entry_status.config(state="normal")
+        self.entry_status.delete(0, tk.END)
+        self.entry_status.insert(0, s)
+        self.entry_status.config(state="readonly")
 
-        # Label for Image Previews
-        self.lbl_preview_img = tk.Label(
-            self.preview_container, bg="#ecf0f1", text="No Preview"
-        )
-        self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
-
-        # Text Widget for Text Previews (Initially Hidden)
-        self.txt_preview = tk.Text(
-            self.preview_container, height=10, width=30, font=("Consolas", 8)
-        )
-
-        # ---------------------------
-
-    # ... (Keep create_toolbar_btn and browse_folder the same) ...
+    # Author: Quang Minh
+    # Function: browse_folder
+    # Description: Open a dialog to browse folder and set the path to entry_req
+    def browse_folder(self):
+        path = filedialog.askdirectory()
+        if path:
+            self.entry_req.delete(0, tk.END)
+            self.entry_req.insert(0, path)
+    
+    # Author: Quang Minh
+    # Function: create_toolbar_btn
+    # Description: Create a toolbar button with icon and text
     def create_toolbar_btn(self, parent, text, icon, cmd):
         btn = tk.Button(
             parent,
@@ -218,109 +245,202 @@ class FileClientApp:
             font=("Segoe UI", 9, "bold"),
         )
         btn.pack(side="left", padx=5)
+        return btn
 
+    # Author: Quang Minh
+    # Function: browse_folder
+    # Description: Open a dialog to browse folder and set the path to entry_req
     def browse_folder(self):
         path = filedialog.askdirectory()
         if path:
             self.entry_req.delete(0, tk.END)
             self.entry_req.insert(0, path)
 
-    # --- NEW: Logic to handle file selection ---
-    def on_file_select(self, event):
+    # ---- Connection actions ----
+    # Author: Quang Minh
+    # Function: on_connect
+    # Description: Handle connect button click, establish connection in a separate thread
+    def on_connect(self):
+        host = self.host_var_entry.get().strip() or DEFAULT_HOST
+        try:
+            port = int(self.port_var_entry.get().strip())
+        except ValueError:
+            messagebox.showerror("Error", "Port must be an integer")
+            return
+
+        self.set_status("Connecting...")
+        self.log_msg(f"Connecting to {host}:{port}...")
+
+        def work():
+            try:
+                # Init client and connect
+                self.client = DFSClient(host, port)
+                self.client.connect(timeout=5)
+                
+                # update UI on main thread
+                self.root.after(0, lambda: self._connect_success(host, port))
+                
+                # Initial file list refresh
+                self.refresh_list()
+                
+            except Exception as e:
+                self.root.after(0, lambda: self._connect_failed(str(e)))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    # Author: Quang Minh
+    # Function: _connect_success
+    # Description: Update UI on successful connection
+    def _connect_success(self, host, port):
+        self.is_connected = True
+        self.set_status(f"Connected {host}:{port}")
+        self.log_msg("Connection successful.")
+        self.btn_connect.config(state="disabled")
+        self.btn_disconnect.config(state="normal")
+
+    # Author: Quang Minh
+    # Function: _connect_failed
+    # Description: Update UI on failed connection
+    def _connect_failed(self, error_msg):
+        self.is_connected = False
+        self.set_status("Disconnected")
+        self.log_msg(f"Error: {error_msg}")
+        messagebox.showerror("Connection Failed", error_msg)
+
+    # Author: Quang Minh
+    # Function: on_disconnect
+    # Description: Handle disconnect button click, close connection
+    def on_disconnect(self):
+        try:
+            self.client.close()
+        except Exception:
+            pass
+        self.btn_connect.configure(state="normal")
+        self.btn_disconnect.configure(state="disabled")
+        self.set_status("Disconnected")
+        self.log_msg("Disconnected")
+
+    # Author: Quang Minh
+    # Function: _get_active_filters
+    # Description:
+    def _get_active_filters(self):
+        """Chuyển đổi trạng thái checkbox thành list filters cho server"""
+        filters = []
+        if self.check_vars["All files"].get():
+            filters.append("all")
+        if self.check_vars["Image files"].get():
+            filters.append("image")
+        if self.check_vars["Video files"].get():
+            filters.append("video")
+        
+        # Nếu không chọn gì cả, mặc định là all
+        if not filters:
+            filters = ["all"]
+        return filters
+
+    # ---- Request actions ----
+    # Author: Quang Minh
+    # Function: on_send_click
+    # Description: Handle Send Request button click
+    def on_send_click(self):
+        """Nút Send Request: Thực chất là gửi lệnh List với các Filter đã chọn"""
+        if not self.is_connected:
+            messagebox.showwarning("Warning", "Please connect to server first.")
+            return
+        self.refresh_list()
+
+    # ---- File operations ----
+    # Author: Quang Minh
+    # Function: refresh_list
+    # Description: Refresh the file list from server based on active filters
+    def refresh_list(self):
+        if not self.is_connected: return
+
+        filters = self._get_active_filters()
+        self.log_msg(f"Requesting list. Filters: {filters}")
+
+        def work():
+            try:
+                # Call list_files with filters
+                resp = self.client.list_files(filter=filters)
+                
+                if resp and resp.get("type") == "list": # Server returned file list
+                    files = resp["payload"].get("files", [])
+                    # Update treeview on main thread
+                    self.root.after(0, lambda: self._update_treeview(files))
+                elif resp and resp.get("type") == "error":
+                    msg = resp.get("payload")
+                    self.root.after(0, lambda: self.log_msg(f"Server Error: {msg}"))
+                else:
+                    self.root.after(0, lambda: self.log_msg(f"Unknown response: {resp}"))
+
+            except Exception as e:
+                self.root.after(0, lambda e=e: self.log_msg(f"List failed: {e}"))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    # Author: Quang Minh
+    # Function: _update_treeview
+    # Description: Update the file list in the treeview
+    def _update_treeview(self, files):
+        self.tree.delete(*self.tree.get_children())
+        if not files:
+            self.log_msg("No files found.")
+            return
+            
+        for i, f in enumerate(files):
+            name = f.get("name", "Unknown")
+            size = f.get("size", 0)
+            sha = f.get("sha256", "")
+            
+            tag = 'odd' if i % 2 != 0 else 'even'
+            # Insert vào treeview
+            self.tree.insert("", "end", text=name, values=(size, sha), tags=(tag,))
+        
+        self.log_msg(f"Updated list with {len(files)} files.")
+        
+    # Author: Ngoc Huy
+    # Function: on_download_click
+    # Description: Handle file download with safe directory creation and threading
+    def on_download_click(self):
+        if not self.is_connected:
+            messagebox.showwarning("Cảnh Báo", "Hãy kết nối với sever trước khi tải !")
+            return
+         
         selected_item = self.tree.selection()
         if not selected_item:
+            messagebox.showwarning("Cảnh Báo", "Hãy chọn file bạn muốn tải !")
             return
+        
+        file_name = self.tree.item(selected_item[0])['text']
 
-        file_name = self.tree.item(selected_item[0], "text")
+        local_path = filedialog.asksaveasfilename(
+            title="Save File",
+            initialfile=file_name,
+            defaultextension=".*"
+        )
 
-        # Reset Preview Panel
-        self.lbl_preview_img.config(image="", text="Loading...")
-        self.txt_preview.pack_forget()
-        self.lbl_preview_img.pack(fill="both", expand=True)
-
-        # In a real app, check if it's a file or folder before requesting
-        # For now, we assume everything is a file and request preview
-        threading.Thread(
-            target=self.fetch_preview_data, args=(file_name,), daemon=True
-        ).start()
-
-    # --- NEW: Fetch logic (Connects to your socket code) ---
-    def fetch_preview_data(self, filename):
-        """
-        This function simulates the network request.
-        Replace the logic inside with your actual socket _send_control calls.
-        """
-        if not self.client_socket:
-            self.update_ui_preview(None, "Not Connected")
+        if not local_path:
             return
-
-        try:
-            # 1. SEND REQUEST (Using logic from previous turn)
-            # _send_control(self.client_socket, {"type": "preview", "payload": {"name": filename}})
-
-            # 2. RECEIVE RESPONSE
-            # resp = _recv_control(self.client_socket)
-
-            # SIMULATED RESPONSE FOR UI TESTING:
-            import time
-
-            time.sleep(0.5)  # Simulate network lag
-
-            # Logic to handle response:
-            # if resp['type'] == 'preview_ready':
-            #    data = _recv_all(self.client_socket, resp['payload']['size'])
-            #    self.root.after(0, self.update_ui_preview, data, resp['payload']['type'])
-
-            pass
-        except Exception as e:
-            print(f"Preview error: {e}")
-
-    # --- NEW: Update UI from Main Thread ---
-    def update_ui_preview(self, data, p_type):
-        """
-        Called by the thread to update the UI safely.
-        """
-        if p_type == "image" and data:
+        self.log_msg(f"Starting download: {file_name} -> {local_path}")
+        def work():
             try:
-                # Load image from bytes
-                pil_image = Image.open(io.BytesIO(data))
+                import os
+                directory = os.path.dirname(local_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory)
+                    self.root.after(0, lambda: self.log_msg(f"Created directory: {directory}"))
+                self.client.download_file(file_name, local_path)
 
-                # Resize to fit container (250x250)
-                pil_image.thumbnail((240, 240))
-                tk_img = ImageTk.PhotoImage(pil_image)
+                # Cập nhật UI khi thành công
+                self.root.after(0, lambda: self.log_msg(f"Download success: {file_name}"))
+                self.root.after(0, lambda: messagebox.showinfo("Success", f"File downloaded successfully to:\n{local_path}"))
 
-                # Update Label
-                self.current_image = tk_img  # Keep reference!
-                self.lbl_preview_img.config(image=tk_img, text="")
-            except Exception:
-                self.lbl_preview_img.config(image="", text="Image Error")
-
-        elif p_type == "text" and data:
-            self.lbl_preview_img.pack_forget()
-            self.txt_preview.pack(fill="both", expand=True)
-            self.txt_preview.delete("1.0", tk.END)
-            self.txt_preview.insert("1.0", data.decode("utf-8"))
-
-        else:
-            self.lbl_preview_img.config(image="", text="No Preview Available")
-
-    def on_connect_click(self):
-        # Add your socket connection logic here
-        self.entry_status.config(state="normal")
-        self.entry_status.delete(0, tk.END)
-        self.entry_status.insert(0, "Connected")
-        self.entry_status.config(state="readonly")
-        # self.client_socket = ...
-        pass
-
-    def on_send_click(self):
-        pass
-
-    def on_refresh_click(self):
-        pass
-
-    def on_download_click(self):
-        pass
+            except Exception as e:
+                # Cập nhật UI khi lỗi
+                self.root.after(0, lambda: self.log_msg(f"Download failed: {str(e)}"))
+                self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to download file:\n{str(e)}"))
+        threading.Thread(target=work, daemon=True).start()
 
 
 if __name__ == "__main__":
