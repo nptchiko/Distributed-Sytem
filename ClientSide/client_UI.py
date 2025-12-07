@@ -166,7 +166,7 @@ class FileClientApp:
         ttk.Label(right_frame, text="Filter Options", font=("Segoe UI", 12, "bold"), background="white").pack(anchor="w", pady=(0, 15))
         
         self.check_vars = {}
-        options = ["All files", "Image files", "Video files"]
+        options = ["All files", "Image files", "Video files","Text files","Sound files","Compressed files"]
         
         for opt in options:
             var = tk.IntVar()
@@ -175,10 +175,10 @@ class FileClientApp:
 
             style = ttk.Style()
             style.configure("TCheckbutton", background="white", font=("Segoe UI", 10))
-            chk.pack(fill="x", pady=8, anchor="w")
+            chk.pack(fill="x", pady=2, anchor="w")
             self.check_vars[opt] = var
 
-        ttk.Separator(right_frame, orient='horizontal').pack(fill='x', pady=20)
+        ttk.Separator(right_frame, orient='horizontal').pack(fill='x', pady=(10,5))
         
         ttk.Label(right_frame, text="Custom Extensions:", background="white").pack(anchor="w", pady=(0, 5))
         self.entry_ext = ttk.Entry(right_frame)
@@ -383,10 +383,48 @@ class FileClientApp:
             self.tree.insert("", "end", text=name, values=(size, sha), tags=(tag,))
         
         self.log_msg(f"Updated list with {len(files)} files.")
-
+        
+    # Author: Ngoc Huy
+    # Function: on_download_click
+    # Description: Handle file download with safe directory creation and threading
     def on_download_click(self):
-        pass
+        if not self.is_connected:
+            messagebox.showwarning("Cảnh Báo", "Hãy kết nối với sever trước khi tải !")
+            return
+         
+        selected_item = self.tree.selection()
+        if not selected_item:
+            messagebox.showwarning("Cảnh Báo", "Hãy chọn file bạn muốn tải !")
+            return
+        
+        file_name = self.tree.item(selected_item[0])['text']
 
+        local_path = filedialog.asksaveasfilename(
+            title="Save File",
+            initialfile=file_name,
+            defaultextension=".*"
+        )
+
+        if not local_path:
+            return
+        self.log_msg(f"Starting download: {file_name} -> {local_path}")
+        def work():
+            try:
+                directory = os.path.dirname(local_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory)
+                    self.root.after(0, lambda: self.log_msg(f"Created directory: {directory}"))
+                self.client.download_file(file_name, local_path)
+
+                # Cập nhật UI khi thành công
+                self.root.after(0, lambda: self.log_msg(f"Download success: {file_name}"))
+                self.root.after(0, lambda: messagebox.showinfo("Success", f"File downloaded successfully to:\n{local_path}"))
+
+            except Exception as e:
+                # Cập nhật UI khi lỗi
+                self.root.after(0, lambda: self.log_msg(f"Download failed: {str(e)}"))
+                self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to download file:\n{str(e)}"))
+        threading.Thread(target=work, daemon=True).start()
 
 if __name__ == "__main__":
     root = tk.Tk()
