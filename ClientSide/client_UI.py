@@ -277,6 +277,9 @@ class FileClientApp:
         self.set_status("Disconnected")
         self.log_msg("Disconnected")
 
+    # Author: Quang Minh
+    # Function: _get_active_filters
+    # Description:
     def _get_active_filters(self):
         """Chuyển đổi trạng thái checkbox thành list filters cho server"""
         filters = []
@@ -292,6 +295,10 @@ class FileClientApp:
             filters = ["all"]
         return filters
 
+    # ---- Request actions ----
+    # Author: Quang Minh
+    # Function: on_send_click
+    # Description: Handle Send Request button click
     def on_send_click(self):
         """Nút Send Request: Thực chất là gửi lệnh List với các Filter đã chọn"""
         if not self.is_connected:
@@ -300,6 +307,9 @@ class FileClientApp:
         self.refresh_list()
 
     # ---- File operations ----
+    # Author: Quang Minh
+    # Function: refresh_list
+    # Description: Refresh the file list from server based on active filters
     def refresh_list(self):
         if not self.is_connected: return
 
@@ -326,6 +336,9 @@ class FileClientApp:
 
         threading.Thread(target=work, daemon=True).start()
 
+    # Author: Quang Minh
+    # Function: _update_treeview
+    # Description: Update the file list in the treeview
     def _update_treeview(self, files):
         self.tree.delete(*self.tree.get_children())
         if not files:
