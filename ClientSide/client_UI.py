@@ -410,6 +410,34 @@ class FileClientApp:
         self.log_msg(f"Starting download: {file_name} -> {local_path}")
         def work():
             try:
+                import os
+                directory = os.path.dirname(local_path)
+                if directory and not os.path.exists(directory):
+                    os.makedirs(directory)
+                    self.root.after(0, lambda: self.log_msg(f"Created directory: {directory}"))
+                self.client.download_file(file_name, local_path)
+
+                # Cập nhật UI khi thành công
+                self.root.after(0, lambda: self.log_msg(f"Download success: {file_name}"))
+                self.root.after(0, lambda: messagebox.showinfo("Success", f"File downloaded successfully to:\n{local_path}"))
+
+            except Exception as e:
+                # Cập nhật UI khi lỗi
+                self.root.after(0, lambda: self.log_msg(f"Download failed: {str(e)}"))
+                self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to download file:\n{str(e)}"))
+        threading.Thread(target=work, daemon=True).start()
+
+        local_path = filedialog.asksaveasfilename(
+            title="Save File",
+            initialfile=file_name,
+            defaultextension=".*"
+        )
+
+        if not local_path:
+            return
+        self.log_msg(f"Starting download: {file_name} -> {local_path}")
+        def work():
+            try:
                 directory = os.path.dirname(local_path)
                 if directory and not os.path.exists(directory):
                     os.makedirs(directory)
