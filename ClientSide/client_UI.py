@@ -332,7 +332,7 @@ class FileClientApp:
                     self.root.after(0, lambda: self.log_msg(f"Unknown response: {resp}"))
 
             except Exception as e:
-                self.root.after(0, lambda: self.log_msg(f"List failed: {e}"))
+                self.root.after(0, lambda e=e: self.log_msg(f"List failed: {e}"))
 
         threading.Thread(target=work, daemon=True).start()
 
