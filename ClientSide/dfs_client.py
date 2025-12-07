@@ -88,8 +88,8 @@ class DFSClient:
     # author: Quang Minh
     # agruemnt: filter
     # example: "all", "image", "video"
-    def list_files(self, filter: Optional[str] = None):
-        self._send_control({"command": "list", "filters": filter, "path": self.path})
+    def list_files(self, filter: Optional[str] = None, path: Optional[str] = None):
+        self._send_control({"command": "list", "filters": filter, "path": path or self.path})
         return self._recv_control()
 
     def ping(self):
