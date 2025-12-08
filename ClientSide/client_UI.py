@@ -19,7 +19,7 @@ class FileClientApp:
     def __init__(self, root, host=DEFAULT_HOST, port=DEFAULT_PORT, path=DEFAULT_PATH):
         self.root = root
         self.root.title("UI Client")
-        self.root.geometry("900x650")
+        self.root.geometry("1200x950")
 
         self.host = host
         self.port = port
@@ -43,6 +43,41 @@ class FileClientApp:
 
     def setup_styles(self):
         # ... (Your existing styles code remain exactly the same) ...
+        style = ttk.Style()
+        style.theme_use("clam")
+
+        style.configure("TFrame", background=self.colors["secondary"])
+        style.configure(
+            "TLabel",
+            background=self.colors["secondary"],
+            foreground=self.colors["text"],
+            font=("Segoe UI", 10),
+        )
+        style.configure("TButton", font=("Segoe UI", 10), padding=6)
+        style.configure(
+            "Header.TLabel",
+            background=self.colors["primary"],
+            foreground=self.colors["white"],
+            font=("Segoe UI", 20, "bold"),
+        )
+        style.configure("Card.TFrame", background=self.colors["white"], relief="flat")
+        style.configure(
+            "Treeview",
+            font=("Segoe UI", 10),
+            rowheight=25,
+            background="white",
+            fieldbackground="white",
+        )
+        style.configure(
+            "Treeview.Heading",
+            font=("Segoe UI", 10, "bold"),
+            background="#bdc3c7",
+            foreground=self.colors["text"],
+        )
+        style.map(
+            "TButton",
+            background=[("active", self.colors["accent"]), ("!disabled", "#bdc3c7")],
+        )
         self.icons = {}
         self.load_icons()
 
@@ -136,6 +171,7 @@ class FileClientApp:
             file_icon = self._get_icon(file_name)
 
             file_node = {"text": " " + file_name, "image": file_icon}
+
             self.tree.insert(node, tk.END, **file_node)
 
     def create_layout(self):
@@ -228,12 +264,9 @@ class FileClientApp:
 
         self.tree.pack(side="left", fill="both", expand=True)
         tree_scroll.pack(side="right", fill="y")
-
         self.tree.heading("#0", text="Folder / File Name", anchor="w")
 
-        self.tree.tag_configure("odd", background="#f8f9fa")
-        self.tree.tag_configure("even", background="#ffffff")
-
+        # --- RIGHT FRAME (Modified for Preview) ---
         right_frame = ttk.Frame(body_frame, style="Card.TFrame", padding=15)
         right_frame.pack(side="right", fill="y", anchor="n")
 
@@ -467,74 +500,47 @@ class FileClientApp:
             target=self._execute_upload, args=(local_path, remote_name), daemon=True
         ).start()
 
-    def on_refresh_click(self):
-        if not self.is_connected:
-            messagebox.showwarning(
-                "Not Connected", "Please connect to the server first."
-            )
-            return
-
-        # Clear existing tree
-        for i in self.tree.get_children():
-            self.tree.delete(i)
-
-        try:
-            # Fetch file list from server
-            if not self.client:
-                return
-            file_list = self.client.list_files(["all"])
-
-            # Build hierarchical tree data
-            if file_list["payload"] is None:
-
-                return
-            messagebox.showinfo("DEBUG", file_list["payload"])
-            self.populate_tree("", file_list["payload"])
-
-        except Exception as e:
-            messagebox.showerror("Error", f"An unexpected error occurred: {e}")
-
-    def _execute_download(self, remote_path, local_path):
-        """Helper function to run the download in a separate thread."""
-        try:
-            if not self.client:
-                # This should not happen if is_connected is true, but as a safeguard
-                raise Exception("Client not initialized.")
-
-            result = self.client.download_file(remote_path, local_path)
-
-            if result and result.get("payload", {}).get("ok"):
-                self.root.after(
-                    0,
-                    lambda: messagebox.showinfo(
-                        "Success",
-                        f"File '{os.path.basename(remote_path)}' downloaded successfully.",
-                    ),
-                )
-            else:
-                error_msg = result.get("payload", {}).get(
-                    "error", "Unknown download error."
-                )
-                self.root.after(
-                    0,
-                    lambda: messagebox.showerror(
-                        "Download Failed",
-                        f"Failed to download '{os.path.basename(remote_path)}': {error_msg}",
-                    ),
-                )
-        except Exception as e:
-            self.root.after(
-                0,
-                lambda: messagebox.showerror(
-                    "Download Error", f"An error occurred during download: {e}"
-                ),
-            )
-        """Nút Send Request: Thực chất là gửi lệnh List với các Filter đã chọn"""
-        if not self.is_connected:
-            messagebox.showwarning("Warning", "Please connect to server first.")
-            return
-        self.refresh_list()
-
+    # def _execute_download(self, remote_path, local_path):
+    #     """Helper function to run the download in a separate thread."""
+    #     try:
+    #         if not self.client:
+    #             # This should not happen if is_connected is true, but as a safeguard
+    #             raise Exception("Client not initialized.")
+    #
+    #         result = self.client.download_file(remote_path, local_path)
+    #
+    #         if result and result.get("payload", {}).get("ok"):
+    #             self.root.after(
+    #                 0,
+    #                 lambda: messagebox.showinfo(
+    #                     "Success",
+    #                     f"File '{os.path.basename(remote_path)}' downloaded successfully.",
+    #                 ),
+    #             )
+    #         else:
+    #             error_msg = result.get("payload", {}).get(
+    #                 "error", "Unknown download error."
+    #             )
+    #             self.root.after(
+    #                 0,
+    #                 lambda: messagebox.showerror(
+    #                     "Download Failed",
+    #                     f"Failed to download '{os.path.basename(remote_path)}': {error_msg}",
+    #                 ),
+    #             )
+    #     except Exception as e:
+    #         self.root.after(
+    #             0,
+    #             lambda: messagebox.showerror(
+    #                 "Download Error", f"An error occurred during download: {e}"
+    #             ),
+    #         )
+    #     """Nút Send Request: Thực chất là gửi lệnh List với các Filter đã chọn"""
+    #     if not self.is_connected:
+    #         messagebox.showwarning("Warning", "Please connect to server first.")
+    #         return
+    #     self.refresh_list()
+    #
     # ---- File operations ----
     # Author: Quang Minh
     # Function: refresh_list
@@ -548,6 +554,9 @@ class FileClientApp:
 
         def work():
             try:
+
+                for i in self.tree.get_children():
+                    self.tree.delete(i)
                 # Call list_files with filters
                 resp = self.client.list_files(filter=filters)
                 if resp and resp.get("type") == "list":  # Server returned file list
@@ -555,7 +564,8 @@ class FileClientApp:
                     # Update request
                     self.set_request(f"{DEFAULT_PATH}")
                     # Update treeview on main thread
-                    self.root.after(0, lambda: self._update_treeview(files))
+                    self.root.after(0, lambda: self.populate_tree("", resp["payload"]))
+
                 elif resp and resp.get("type") == "error":
                     msg = resp.get("payload")
                     self.root.after(0, lambda: self.log_msg(f"Server Error: {msg}"))
@@ -570,25 +580,26 @@ class FileClientApp:
 
         threading.Thread(target=work, daemon=True).start()
 
-    # Author: Quang Minh
-    # Function: _update_treeview
-    # Description: Update the file list in the treeview
-    def _update_treeview(self, files):
-        self.tree.delete(*self.tree.get_children())
-        if not files:
-            self.log_msg("No files found.")
-            return
-
-        for i, f in enumerate(files):
-            name = f.get("name", "Unknown")
-            size = f.get("size", 0)
-            sha = f.get("sha256", "")
-
-            tag = "odd" if i % 2 != 0 else "even"
-            # Insert vào treeview
-            self.tree.insert("", "end", text=name, values=(size, sha), tags=(tag,))
-
-        self.log_msg(f"Updated list with {len(files)} files.")
+    #
+    # # Author: Quang Minh
+    # # Function: _update_treeview
+    # # Description: Update the file list in the treeview
+    # def _update_treeview(self, files):
+    #     self.tree.delete(*self.tree.get_children())
+    #     if not files:
+    #         self.log_msg("No files found.")
+    #         return
+    #
+    #     for i, f in enumerate(files):
+    #         name = f.get("name", "Unknown")
+    #         size = f.get("size", 0)
+    #         sha = f.get("sha256", "")
+    #
+    #         tag = "odd" if i % 2 != 0 else "even"
+    #         # Insert vào treeview
+    #         self.tree.insert("", "end", text=name, values=(size, sha), tags=(tag,))
+    #
+    #     self.log_msg(f"Updated list with {len(files)} files.")
 
     # Author: Ngoc Huy
     # Function: on_download_click
@@ -603,8 +614,10 @@ class FileClientApp:
         if not selected_item:
             messagebox.showwarning("Cảnh Báo", "Hãy chọn file bạn muốn tải !")
             return
-
+        print(len(selected_item))
         file_name = self.tree.item(selected_item[0])["text"]
+        file_name = file_name.removeprefix(" ")
+        print(file_name)
 
         local_path = filedialog.asksaveasfilename(
             title="Save File", initialfile=file_name, defaultextension=".*"
@@ -624,8 +637,28 @@ class FileClientApp:
                     self.root.after(
                         0, lambda: self.log_msg(f"Created directory: {directory}")
                     )
+                ### FIX
+                ### Author: chiko
+                ### Description: handle khi tải file trong folder
 
-                self.client.download_file(file_name, local_path)
+                remote_path = ""  # -> storage
+                child_id = selected_item[0]
+                parent_id = self.tree.parent(child_id)
+
+                while child_id:
+                    remote_path = os.path.join(
+                        self.tree.item(child_id, "text").removeprefix(" "), remote_path
+                    )
+                    child_id = parent_id
+                    parent_id = self.tree.parent(child_id)
+
+                # Xoa dau / cuoi
+                remote_path = remote_path[:-1]
+
+                self.set_request(remote_path)
+                print(f"remote path: {remote_path}")
+
+                self.client.download_file(remote_path, local_path)
 
                 # Cập nhật UI khi thành công
                 self.root.after(
@@ -639,13 +672,18 @@ class FileClientApp:
                 )
 
             except Exception as e:
+
                 # Cập nhật UI khi lỗi
-                self.root.after(0, lambda: self.log_msg(f"Download failed: {str(e)}"))
+                error_msg = str(e)
+
                 self.root.after(
                     0,
                     lambda: messagebox.showerror(
-                        "Error", f"Failed to download file:\n{str(e)}"
+                        "Error", f"Failed to download file:\n {error_msg}"
                     ),
+                )
+                self.root.after(
+                    0, lambda: self.log_msg(f"Download failed: {error_msg}")
                 )
 
         threading.Thread(target=work, daemon=True).start()

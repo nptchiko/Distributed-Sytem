@@ -201,7 +201,7 @@ class DFSClient:
         #     raise DFSProtocolError(f"Unexpected control reply: {ready}")
 
         if ready["type"] == "error":
-            return ready
+            raise DFSProtocolError(f"Error when downloading: {ready}")
         if ready["type"] != "ready":
             raise DFSProtocolError(f"Unexpected control reply: {ready}")
 

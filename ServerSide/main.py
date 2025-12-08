@@ -1,30 +1,3 @@
-# A simple Python TCP server for a Distributed File System (DFS)-style application.
-# Protocol: length-prefixed JSON control messages + raw binary file data for uploads/downloads.
-#
-# Features implemented to match the "ServerSide" C# DFS intent:
-# - Multiple concurrent clients (thread-per-connection)
-# - List files in server storage
-# - Upload a file (client sends control msg then raw bytes streamed in chunks)
-# - Download a file (server streams file bytes after control msg)
-# - Delete a file
-# - Basic integrity check using SHA256 (sent after upload, validated by server)
-# - Notification broadcasts when files are added/removed
-#
-# Notes:
-# - This is a headless server (no GUI). It stores files under ./storage.
-# - It uses a simple JSON control protocol with a 4-byte length prefix on each control message.
-# - File transfers are chunked and preceded by a control message describing the operation.
-#
-# Example control messages (JSON):
-# {"type":"list"} -> server responds {"type":"list","payload":[{"name":"f.txt","size":1234,"sha256":"..."}]}
-# {"type":"upload","payload":{"name":"f.txt","size":1234,"sha256":"..."}}
-#      After server replies {"type":"ready","payload":null}, client streams exactly `size` bytes raw.
-# {"type":"download","payload":{"name":"f.txt"}} -> server replies {"type":"ready","payload":{"size":1234,"sha256":"..."}} then streams file bytes.
-# {"type":"delete","payload":{"name":"f.txt"}}
-#
-# Run: python server.py [host] [port]
-# Default host=0.0.0.0 port=9000
-
 import os
 import socket
 import threading
@@ -312,16 +285,18 @@ def handle_delete(sock: socket.socket, payload: dict):
         _send_control(sock, {"type": "error", "payload": str(e)})
 
 
-def _safe_path(requested_path):
+def _safe_path(requested_path: str):
 
-    safe_path = requested_path.lstrip("/")
-
+    safe_path = requested_path.replace("storage", "")
+    safe_path = safe_path.lstrip("/")
+    print(f"[DEBUG] SAFE PATH: {requested_path}")
     full_path = os.path.join(STORAGE_DIR, safe_path)
 
     real_path = os.path.realpath(full_path)
 
     if os.path.commonprefix([real_path, STORAGE_DIR]) == STORAGE_DIR:
         return real_path
+
     raise ValueError("Invalid path")
 
 
@@ -344,7 +319,6 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
 
             command = jsonData.get("command")
             payload = jsonData.get("payload")
-            # path = jsonData.get("path")
             filters = jsonData.get("filters")
 
             try:
@@ -353,20 +327,19 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
                     path = _safe_path(path)
                 else:
                     path = STORAGE_DIR
+                print(f"Path requested: {path}")
             except ValueError as e:
                 _send_control(client_sock, {"type": "error", "payload": str(e)})
                 break
 
             if payload is None:
                 payload = {}
-
-            if path is None:
-                path = STORAGE_DIR
+            #
+            # if path is None:
+            #     path = STORAGE_DIR
 
             if filters is None:
                 filters = []
-
-            print(f"path requested: {path}")
 
             # ctrl = _recv_control(client_sock)
             # if ctrl is None:
