@@ -19,7 +19,7 @@ class FileClientApp:
     def __init__(self, root, host=DEFAULT_HOST, port=DEFAULT_PORT, path=DEFAULT_PATH):
         self.root = root
         self.root.title("UI Client")
-        self.root.geometry("900x650")
+        self.root.geometry("1200x950")
 
         self.host = host
         self.port = port
@@ -27,7 +27,7 @@ class FileClientApp:
         self.client = DFSClient(self.host, self.port)
         self.worker_lock = threading.Lock()
 
-        self.client_socket = None
+        self.client = None
         self.is_connected = False
 
         self.colors = {
@@ -78,6 +78,101 @@ class FileClientApp:
             "TButton",
             background=[("active", self.colors["accent"]), ("!disabled", "#bdc3c7")],
         )
+        self.icons = {}
+        self.load_icons()
+
+    def load_icons(self):
+        self.icons["file"] = tk.PhotoImage(file="./assets/ic_file.png")
+        self.icons["folder"] = tk.PhotoImage(file="./assets/ic_dir.png")
+        self.icons["image"] = tk.PhotoImage(file="./assets/ic_image.png")
+        self.icons["sound"] = tk.PhotoImage(file="./assets/ic_sound.png")
+        self.icons["video"] = tk.PhotoImage(file="./assets/ic_video.png")
+        self.icons["zip"] = tk.PhotoImage(file="./assets/ic_zip.png")
+        self.icons["docs"] = tk.PhotoImage(file="./assets/ic_text.png")
+
+    def _get_icon(self, file_path):
+        """Return a specific icon based on file extension, or a default."""
+        ext = os.path.splitext(file_path)[1].lower()
+
+        if ext in [".jpg", ".jpeg", ".png", ".gif"]:
+            return self.icons.get("image")
+
+        if ext in [".mp4", ".mkv", ".webm", ".flv"]:
+            return self.icons.get("video")
+
+        if ext in [".mp3", ".m4p", ".m4a", ".flac"]:
+            return self.icons.get("sound")
+
+        if ext in [".txt", ".pdf", ".doc", ".docx"]:
+            return self.icons.get("docs")
+
+        if ext in [".rar", ".zip"]:
+            return self.icons.get("zip")
+        # Add more rules here for video, text, etc.
+        return self.icons.get("file")
+
+    # Author: Tien
+    #### EXAMPLE
+    #    {
+    #   "name": "storage",
+    #   "path": "storage/",
+    #   "subdirectories": [
+    #     {
+    #       "name": "dir1",
+    #       "path": "storage/dir1",
+    #       "subdirectories": [],
+    #       "files": [
+    #         {
+    #           "name": "text.txt",
+    #           "path": "storage/dir1/text.txt"
+    #         }
+    #
+    #     }
+    #   ],
+    #   "files": [
+    #     {
+    #       "name": "0dca72984a2f14751488c6b37068ca2e.jpg",
+    #       "path": "storage/0dca72984a2f14751488c6b37068ca2e.jpg"
+    #     },
+    #     {
+    #       "name": "Video_2025-11-15_01-49-29.mp4",
+    #       "path": "storage/a.mp4"
+    #     }
+    #   ]
+    # }
+    #
+
+    def populate_tree(self, parent, data: dict):
+
+        # Assuming 'data' is a list of dicts with 'name' and 'children' keys
+
+        name = data.get("name")
+        path = data.get("path")
+        subdir: list = data.get("subdirectories")
+        files: list = data.get("files")
+
+        directory_icon = self.icons.get("folder")
+
+        directory_node = {"text": " " + name}
+
+        if directory_icon:
+            directory_node["image"] = directory_icon
+
+        node = self.tree.insert(parent, "end", **directory_node)
+
+        if subdir is not []:
+            for dir in subdir:
+                self.populate_tree(node, dir)
+
+        for file in files:
+            file_name = file.get("name") or "Untitled"
+            file_path = file.get("path")
+
+            file_icon = self._get_icon(file_name)
+
+            file_node = {"text": " " + file_name, "image": file_icon}
+
+            self.tree.insert(node, tk.END, **file_node)
 
     def create_layout(self):
         # ... (Keep Header and Left Frame code exactly the same until 'File Response List') ...
@@ -169,12 +264,9 @@ class FileClientApp:
 
         self.tree.pack(side="left", fill="both", expand=True)
         tree_scroll.pack(side="right", fill="y")
-
         self.tree.heading("#0", text="Folder / File Name", anchor="w")
 
-        self.tree.tag_configure("odd", background="#f8f9fa")
-        self.tree.tag_configure("even", background="#ffffff")
-
+        # --- RIGHT FRAME (Modified for Preview) ---
         right_frame = ttk.Frame(body_frame, style="Card.TFrame", padding=15)
         right_frame.pack(side="right", fill="y", anchor="n")
 
@@ -386,12 +478,69 @@ class FileClientApp:
     # Function: on_send_click
     # Description: Handle Send Request button click
     def on_send_click(self):
-        """Nút Send Request: Thực chất là gửi lệnh List với các Filter đã chọn"""
         if not self.is_connected:
-            messagebox.showwarning("Warning", "Please connect to server first.")
+            messagebox.showwarning(
+                "Not Connected", "Please connect to the server first."
+            )
             return
-        self.refresh_list()
 
+        local_path = filedialog.askopenfilename(
+            title="Select File to Upload",
+            filetypes=[("All Files", "*.*")],
+        )
+
+        if not local_path:
+            return  # User cancelled
+
+        remote_name_str = self.entry_req.get()
+        remote_name = remote_name_str if remote_name_str.strip() else None
+
+        # Use a thread to avoid blocking the UI
+        threading.Thread(
+            target=self._execute_upload, args=(local_path, remote_name), daemon=True
+        ).start()
+
+    # def _execute_download(self, remote_path, local_path):
+    #     """Helper function to run the download in a separate thread."""
+    #     try:
+    #         if not self.client:
+    #             # This should not happen if is_connected is true, but as a safeguard
+    #             raise Exception("Client not initialized.")
+    #
+    #         result = self.client.download_file(remote_path, local_path)
+    #
+    #         if result and result.get("payload", {}).get("ok"):
+    #             self.root.after(
+    #                 0,
+    #                 lambda: messagebox.showinfo(
+    #                     "Success",
+    #                     f"File '{os.path.basename(remote_path)}' downloaded successfully.",
+    #                 ),
+    #             )
+    #         else:
+    #             error_msg = result.get("payload", {}).get(
+    #                 "error", "Unknown download error."
+    #             )
+    #             self.root.after(
+    #                 0,
+    #                 lambda: messagebox.showerror(
+    #                     "Download Failed",
+    #                     f"Failed to download '{os.path.basename(remote_path)}': {error_msg}",
+    #                 ),
+    #             )
+    #     except Exception as e:
+    #         self.root.after(
+    #             0,
+    #             lambda: messagebox.showerror(
+    #                 "Download Error", f"An error occurred during download: {e}"
+    #             ),
+    #         )
+    #     """Nút Send Request: Thực chất là gửi lệnh List với các Filter đã chọn"""
+    #     if not self.is_connected:
+    #         messagebox.showwarning("Warning", "Please connect to server first.")
+    #         return
+    #     self.refresh_list()
+    #
     # ---- File operations ----
     # Author: Quang Minh
     # Function: refresh_list
@@ -405,6 +554,9 @@ class FileClientApp:
 
         def work():
             try:
+
+                for i in self.tree.get_children():
+                    self.tree.delete(i)
                 # Call list_files with filters
                 resp = self.client.list_files(filter=filters)
                 if resp and resp.get("type") == "list":  # Server returned file list
@@ -412,7 +564,8 @@ class FileClientApp:
                     # Update request
                     self.set_request(f"{DEFAULT_PATH}")
                     # Update treeview on main thread
-                    self.root.after(0, lambda: self._update_treeview(files))
+                    self.root.after(0, lambda: self.populate_tree("", resp["payload"]))
+
                 elif resp and resp.get("type") == "error":
                     msg = resp.get("payload")
                     self.root.after(0, lambda: self.log_msg(f"Server Error: {msg}"))
@@ -427,25 +580,26 @@ class FileClientApp:
 
         threading.Thread(target=work, daemon=True).start()
 
-    # Author: Quang Minh
-    # Function: _update_treeview
-    # Description: Update the file list in the treeview
-    def _update_treeview(self, files):
-        self.tree.delete(*self.tree.get_children())
-        if not files:
-            self.log_msg("No files found.")
-            return
-
-        for i, f in enumerate(files):
-            name = f.get("name", "Unknown")
-            size = f.get("size", 0)
-            sha = f.get("sha256", "")
-
-            tag = "odd" if i % 2 != 0 else "even"
-            # Insert vào treeview
-            self.tree.insert("", "end", text=name, values=(size, sha), tags=(tag,))
-
-        self.log_msg(f"Updated list with {len(files)} files.")
+    #
+    # # Author: Quang Minh
+    # # Function: _update_treeview
+    # # Description: Update the file list in the treeview
+    # def _update_treeview(self, files):
+    #     self.tree.delete(*self.tree.get_children())
+    #     if not files:
+    #         self.log_msg("No files found.")
+    #         return
+    #
+    #     for i, f in enumerate(files):
+    #         name = f.get("name", "Unknown")
+    #         size = f.get("size", 0)
+    #         sha = f.get("sha256", "")
+    #
+    #         tag = "odd" if i % 2 != 0 else "even"
+    #         # Insert vào treeview
+    #         self.tree.insert("", "end", text=name, values=(size, sha), tags=(tag,))
+    #
+    #     self.log_msg(f"Updated list with {len(files)} files.")
 
     # Author: Ngoc Huy
     # Function: on_download_click
@@ -460,8 +614,10 @@ class FileClientApp:
         if not selected_item:
             messagebox.showwarning("Cảnh Báo", "Hãy chọn file bạn muốn tải !")
             return
-
+        print(len(selected_item))
         file_name = self.tree.item(selected_item[0])["text"]
+        file_name = file_name.removeprefix(" ")
+        print(file_name)
 
         local_path = filedialog.asksaveasfilename(
             title="Save File", initialfile=file_name, defaultextension=".*"
@@ -481,8 +637,28 @@ class FileClientApp:
                     self.root.after(
                         0, lambda: self.log_msg(f"Created directory: {directory}")
                     )
+                ### FIX
+                ### Author: chiko
+                ### Description: handle khi tải file trong folder
 
-                self.client.download_file(file_name, local_path)
+                remote_path = ""  # -> storage
+                child_id = selected_item[0]
+                parent_id = self.tree.parent(child_id)
+
+                while child_id:
+                    remote_path = os.path.join(
+                        self.tree.item(child_id, "text").removeprefix(" "), remote_path
+                    )
+                    child_id = parent_id
+                    parent_id = self.tree.parent(child_id)
+
+                # Xoa dau / cuoi
+                remote_path = remote_path[:-1]
+
+                self.set_request(remote_path)
+                print(f"remote path: {remote_path}")
+
+                self.client.download_file(remote_path, local_path)
 
                 # Cập nhật UI khi thành công
                 self.root.after(
@@ -496,13 +672,18 @@ class FileClientApp:
                 )
 
             except Exception as e:
+
                 # Cập nhật UI khi lỗi
-                self.root.after(0, lambda: self.log_msg(f"Download failed: {str(e)}"))
+                error_msg = str(e)
+
                 self.root.after(
                     0,
                     lambda: messagebox.showerror(
-                        "Error", f"Failed to download file:\n{str(e)}"
+                        "Error", f"Failed to download file:\n {error_msg}"
                     ),
+                )
+                self.root.after(
+                    0, lambda: self.log_msg(f"Download failed: {error_msg}")
                 )
 
         threading.Thread(target=work, daemon=True).start()
