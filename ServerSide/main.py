@@ -69,10 +69,12 @@ def _recv_control(sock: socket.socket) -> dict:
     """Receive a 4-byte length-prefixed JSON control message. Returns dict or None on EOF."""
     length_bytes = _recv_all(sock, 4)
     if not length_bytes:
+        print("_RECV_CONTROL: length_bytes is None")
         return None
     length = int.from_bytes(length_bytes, "big")
     payload = _recv_all(sock, length)
     if not payload:
+        print("_RECV_CONTROL: payload is not loaded")
         return None
     try:
         return json.loads(payload.decode(ENCODING))
@@ -329,14 +331,16 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
     print(f"New client: {addr}")
     try:
         while True:
-            # data = client_sock.recv(4096)
-            # jsonData = data.decode(ENCODING)
-            # print(f"-> Json requested: {jsonData}")
-            # jsonData = json.loads(jsonData)
+
+            print(f"=========== NEW REQUEST ============")
+
             jsonData = _recv_control(client_sock)
-            if  jsonData is None:
-                print("error")
+
+            if jsonData is None:
+                print(f"-> Json requested: not found")
                 break
+
+            print(f"-> Json requested: {jsonData}")
 
             command = jsonData.get("command")
             payload = jsonData.get("payload")
