@@ -167,25 +167,44 @@ class DFSClient:
     # Description: add filter of file to load-balancing server with filter
     # Example: {"command": "download", "payload": {"name": "/home/public/Documents/a.jpg", "filter": "image"}}
     def download_file(self, remote_name: str, local_path: str, progress_callback=None):
+
+        # remote_name -> file name
+
         if not os.path.exists(os.path.dirname(local_path)):
             os.makedirs(os.path.dirname(local_path))
         # send control
         self._send_control(
             {
+                # Author:
+                # Description: Sua lai cai schema
+                # OLD
+                # "command": "download",
+                # "payload": {
+                #     "path": f"{self.path}{remote_name}",
+                #     "filter": _filter(remote_name),
+                # },
+                # NEW
                 "command": "download",
-                "payload": {
-                    "path": f"{self.path}{remote_name}",
-                    "filter": _filter(remote_name),
-                },
+                "path": f"{os.path.join(self.path, remote_name)}",
             }
         )
         ready = self._recv_control()
         if not ready:
             raise DFSProtocolError("No response from server")
-        if ready.get("command") == "error":
+        # FIX
+        # Author: chiko
+        # Description: sua lai schema :)
+        #
+        # if ready.get("command") == "error":
+        #     return ready
+        # if ready.get("command") != "ready":
+        #     raise DFSProtocolError(f"Unexpected control reply: {ready}")
+
+        if ready["type"] == "error":
             return ready
-        if ready.get("command") != "ready":
+        if ready["type"] != "ready":
             raise DFSProtocolError(f"Unexpected control reply: {ready}")
+
         size = int(ready["payload"]["size"])
         expected_sha = ready["payload"].get("sha256")
         # receive raw bytes
@@ -207,6 +226,7 @@ class DFSClient:
             os.remove(tmp_path)
             raise DFSProtocolError("SHA mismatch after download")
         os.replace(tmp_path, local_path)
+
         return {
             "command": "download_result",
             "payload": {"ok": True, "size": size, "sha256": actual_sha},
