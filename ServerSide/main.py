@@ -38,6 +38,7 @@ import io
 import cv2  # OpenCV cho video
 import fitz # PyMuPDF cho PDF
 import numpy as np
+import tempfile 
 
 HOST = "0.0.0.0"
 PORT = 9002     #video
@@ -371,7 +372,84 @@ def _get_pdf_thumbnail(path: str, num_pages=3) -> bytes:
     except Exception as e:
         print(f"Error PDF thumb: {e}")
         return None
-    
+
+
+def _generate_video_snippet(path: str, duration_sec: int = 5, target_width: int = 640) -> bytes:
+    try:
+        cap = cv2.VideoCapture(path)
+        if not cap.isOpened():
+            return None
+
+        # Get original properties
+        orig_fps = cap.get(cv2.CAP_PROP_FPS)
+        if orig_fps <= 0: orig_fps = 24.0
+        
+        orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        
+        # CALCULATE NEW DIMENSIONS (Resize)
+        if orig_width > target_width:
+            scale_ratio = target_width / orig_width
+            new_width = target_width
+            new_height = int(orig_height * scale_ratio)
+        else:
+            new_width = orig_width
+            new_height = orig_height
+
+        target_fps = 24.0
+        
+        # If original is already low FPS (e.g. 10fps), keep it, don't fake frames.
+        final_fps = min(orig_fps, target_fps)
+        
+        # Calculate frame skipping step
+        max_frames_to_read = int(orig_fps * duration_sec)
+
+        # Temp file
+        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp_file:
+            temp_path = tmp_file.name
+
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
+        out = cv2.VideoWriter(temp_path, fourcc, final_fps, (new_width, new_height))
+
+        frames_read = 0
+        frames_written = 0
+        
+        while frames_read < max_frames_to_read:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            
+            # Smart frame dropping logic to match target FPS
+            # 'frames_written' to match the time of 'frames_read'
+            expected_frames = int(frames_read * (final_fps / orig_fps))
+            
+            if frames_written <= expected_frames:
+                # Resize uses INTER_LINEAR which is faster than INTER_AREA and good for up to 640px
+                resized_frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+                out.write(resized_frame)
+                frames_written += 1
+            
+            frames_read += 1
+
+        cap.release()
+        out.release()
+        
+        # Read bytes
+        video_bytes = None
+        with open(temp_path, "rb") as f:
+            video_bytes = f.read()
+            
+        try:
+            os.remove(temp_path)
+        except:
+            pass
+            
+        return video_bytes
+
+    except Exception as e:
+        print(f"Error generating video snippet: {e}")
+        return None
+
 
 def handle_preview(sock: socket.socket, path: str):
     safe_name = os.path.basename(path)
@@ -392,7 +470,12 @@ def handle_preview(sock: socket.socket, path: str):
 
     elif ext in [".pdf"]:
         preview_data = _get_pdf_thumbnail(path)
-        preview_type = "image" # PDF preview cũng là gửi về 1 tấm ảnh trang bìa
+        preview_type = "image" 
+
+    elif ext in [".mp4", ".avi", ".mkv", ".mov", ".webm"]:
+        print(f"Generating 4s preview for {safe_name}...")
+        preview_data = _generate_video_snippet(path, duration_sec=5, target_width=640)
+        preview_type = "video"
     
     # STRATEGY 2: Text Files (Read first 500 bytes)
     elif ext in [".txt", ".py", ".json", ".md", ".log"]:
