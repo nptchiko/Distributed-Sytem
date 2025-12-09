@@ -721,7 +721,7 @@ class FileClientApp:
     # Function: on_download_click
     # Description: Handle file download with safe directory creation and threading
     def on_download_click(self):
-        if not self.is_connected:
+        if not self.is_connected or not self.client:
             messagebox.showwarning("Cảnh Báo", "Hãy kết nối với sever trước khi tải !")
             return
 
