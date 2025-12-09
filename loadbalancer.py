@@ -7,10 +7,14 @@ import struct
 # Server addresses
 server1 = ("127.0.0.1", 9001)  # Image server
 server2 = ("127.0.0.1", 9002)  # Video server
+server3 = ("127.0.0.1", 9003)  # Document server
 
 # format extensions
 video_exts = {".mp4", ".mkv", ".webm", ".flv", ".avi"}
 image_exts = {".jpg", ".jpeg", ".png", ".bmp", ".gif"}
+docs_exts = {".txt", ".md", ".doc", ".pdf"}
+
+DEFAULT_PATH = "storage"
 
 
 class Coordinator:
@@ -56,16 +60,25 @@ class Coordinator:
             print(f"[ERROR] Receiving packet: {e}")
             return None
 
-    def _get_target_server_by_path(self, path):
+    def _get_target_server_by_path(self, path: str):
         # define target server based on file extension
+
         if not path or "." not in path:
             return None
 
-        ext = path[path.rfind(".") :].lower()
+        ### FIX
+        ### Author: chiko
+        ### Description: xử lý nếu kèm theo folder
+
+        path = path.split("/")[-1]
+        ext = "." + path.split(".")[-1]
+
         if ext in image_exts:
             return server1
         elif ext in video_exts:
             return server2
+        elif ext in docs_exts:
+            return server3
         else:
             return None
 
@@ -306,17 +319,18 @@ class Coordinator:
                     return
 
                 command = request.get("command")
-                print(f"[REQUEST] {client_addr} - Command: {command}")
+                path = request.get("path", DEFAULT_PATH)
+                print(f"[REQUEST] {client_addr} - Command: {command} - Path: {path}")
 
                 # --- COMMAND: LIST ---
                 if command == "list":
-                    path = request.get("path", "/")
+                    path = request.get("path", DEFAULT_PATH)
                     filters = request.get("filters", ["all"])
 
                     final_response = {
                         "type": "list",
                         "payload": {
-                            "name": "root",
+                            "name": "storage",
                             "path": path,
                             "subdirectories": [],
                             "files": [],
