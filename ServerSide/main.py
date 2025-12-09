@@ -40,10 +40,10 @@ ENCODING = "utf-8"
 STORAGE_DIR = os.path.join(os.getcwd(), "storage")
 RECV_BUFFER = 8192
 
-SOUND_EXTENSIONS = {"mp3", "m4p", "m4a", "flac"}
+SOUND_EXTENSIONS = {"mp3", "m4p", "m4a", "flac", "ogg"}
 VIDEO_EXTENSIONS = {"mp4", "mkv", "webm", "flv"}
-TEXT_EXTENSIONS = {"txt", "doc", "docx"}
-IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "bmp"}
+TEXT_EXTENSIONS = {"txt", "md", "pdf"}
+IMAGE_EXTENSIONS = {"jpg", "jpeg", "png"}
 COMPRESSED_EXTENSIONS = {"7z", "rar", "zip"}
 
 if not os.path.exists(STORAGE_DIR):
@@ -264,15 +264,10 @@ def handle_upload(sock: socket.socket, payload: dict):
         _send_control(sock, {"type": "error", "payload": str(e)})
 
 
-def handle_download(sock: socket.socket, path: str, filters: list):
+def handle_download(sock: socket.socket, path: str):
     # The `path` is expected to be an absolute and safe path from `_safe_path()`
     if not os.path.isfile(path):
         _send_control(sock, {"type": "error", "payload": "file_not_found"})
-        return
-
-    # Check if the file matches the filters, if any filters are provided.
-    if filters and not any(is_end_with(f, path) for f in filters):
-        _send_control(sock, {"type": "error", "payload": "file_type_mismatch"})
         return
 
     size = os.path.getsize(path)
@@ -391,7 +386,7 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
 
             elif command == "download":
                 # The 'path' variable is sanitized by _safe_path and passed directly.
-                handle_download(client_sock, path, filters)
+                handle_download(client_sock, path)
 
             elif command == "delete":
                 handle_delete(client_sock, payload or {})
