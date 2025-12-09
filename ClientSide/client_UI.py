@@ -322,9 +322,123 @@ class FileClientApp:
             font=("Segoe UI", 10, "bold"),
             background="white",
         ).pack(anchor="w")
-        self.log_text = tk.Text(right_frame, height=15, width=30, font=("Consolas", 8))
+        self.log_text = tk.Text(right_frame, height=10, width=30, font=("Consolas", 8))
         self.log_text.pack(fill="both", expand=True, pady=(5, 0))
         self.log_text.config(state="disabled")
+
+        # Handle event when a file is selected
+        self.tree.bind("<<TreeviewSelect>>", self.on_file_select)
+
+        ### PREVIEW SECTION
+        ttk.Label(
+            right_frame,
+            text="File Preview",
+            font=("Segoe UI", 12, "bold"),
+            background="white",
+        ).pack(anchor="w", pady=(0, 10))
+
+        self.preview_container = tk.Frame(
+            right_frame, bg="white", height=250, width=250
+        )
+        self.preview_container.pack(fill="both", expand=True)
+        self.preview_container.pack_propagate(False)  # Force size
+
+        # Label for Image Previews
+        self.lbl_preview_img = tk.Label(
+            self.preview_container, bg="#ecf0f1", text="No Preview"
+        )
+        self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
+
+        # Text Widget for Text Previews (Initially Hidden)
+        self.txt_preview = tk.Text(
+            self.preview_container, height=15, width=30, font=("Consolas", 8)
+        )
+
+    def on_file_select(self, event):
+        pass
+
+        # CODE mẫu tham khảo: nhớ xóa khi xong chức năng
+        # selected_item = self.tree.selection()
+        # if not selected_item:
+        #     return
+        #
+        # file_name = self.tree.item(selected_item[0], "text")
+        #
+        # # Reset Preview Panel
+        # self.lbl_preview_img.config(image="", text="Loading...")
+        # self.txt_preview.pack_forget()
+        # self.lbl_preview_img.pack(fill="both", expand=True)
+        #
+        # # In a real app, check if it's a file or folder before requesting
+        # # For now, we assume everything is a file and request preview
+        # threading.Thread(target=self.fetch_preview_data, args=(file_name,), daemon=True).start()
+        #
+
+    # --- NEW: Fetch logic (Connects to your socket code) ---
+    def fetch_preview_data(self, filename):
+        """
+        This function simulates the network request.
+        Replace the logic inside with your actual socket _send_control calls.
+        """
+        pass
+        # CODE mẫu tham khảo: nhớ xóa khi xong chức năng
+
+        # if not self.client_socket:
+        #     self.update_ui_preview(None, "Not Connected")
+        #     return
+        #
+        # try:
+        #     # 1. SEND REQUEST (Using logic from previous turn)
+        #     # _send_control(self.client_socket, {"type": "preview", "payload": {"name": filename}})
+        #
+        #     # 2. RECEIVE RESPONSE
+        #     # resp = _recv_control(self.client_socket)
+        #
+        #     # SIMULATED RESPONSE FOR UI TESTING:
+        #     import time
+        #     time.sleep(0.5) # Simulate network lag
+        #
+        #     # Logic to handle response:
+        #     # if resp['type'] == 'preview_ready':
+        #     #    data = _recv_all(self.client_socket, resp['payload']['size'])
+        #     #    self.root.after(0, self.update_ui_preview, data, resp['payload']['type'])
+        #
+        #     pass
+        # except Exception as e:
+        #     print(f"Preview error: {e}")
+
+    # --- NEW: Update UI from Main Thread ---
+    def update_ui_preview(self, data, p_type):
+        """
+        Called by the thread to update the UI safely.
+        """
+        pass
+
+    # CODE mẫu tham khảo: nhớ xóa khi xong chức năng
+    # if p_type == "image" and data:
+    #     try:
+    #         # Load image from bytes
+    #         pil_image = Image.open(io.BytesIO(data))
+    #
+    #         # Resize to fit container (250x250)
+    #         pil_image.thumbnail((240, 240))
+    #         tk_img = ImageTk.PhotoImage(pil_image)
+    #
+    #         # Update Label
+    #         self.current_image = tk_img # Keep reference!
+    #         self.lbl_preview_img.config(image=tk_img, text="")
+    #     except Exception:
+    #         self.lbl_preview_img.config(image="", text="Image Error")
+    #
+    # elif p_type == "text" and data:
+    #     self.lbl_preview_img.pack_forget()
+    #     self.txt_preview.pack(fill="both", expand=True)
+    #     self.txt_preview.delete("1.0", tk.END)
+    #     self.txt_preview.insert("1.0", data.decode("utf-8"))
+    #
+    # else:
+    #     self.lbl_preview_img.config(image="", text="No Preview Available")
+    #
 
     # ---- UI helpers ----
     # Author: Quang Minh

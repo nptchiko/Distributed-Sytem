@@ -232,6 +232,15 @@ def handle_upload(sock: socket.socket, payload: dict):
         _send_control(sock, {"type": "error", "payload": str(e)})
 
 
+### NEW
+def handle_preview(sock: socket.socket, path: str):
+    pass
+
+
+# Xử lý chuỗi để lấy extension của file
+# Dùng if else để xử lý từng loại file
+
+
 def handle_download(sock: socket.socket, path: str, filters: list):
     # The `path` is expected to be an absolute and safe path from `_safe_path()`
     if not os.path.isfile(path):
@@ -363,6 +372,9 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
 
             elif command == "ping":
                 _send_control(client_sock, {"type": "pong", "payload": None})
+
+            elif command == "preview":
+                handle_preview(client_sock, path)
 
             else:
                 _send_control(
