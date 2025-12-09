@@ -32,6 +32,12 @@ import json
 import hashlib
 import time
 from typing import Dict, Tuple
+from PIL import Image
+import io
+
+import cv2  # OpenCV cho video
+import fitz # PyMuPDF cho PDF
+import numpy as np
 
 HOST = "0.0.0.0"
 PORT = 9002     #video
@@ -286,6 +292,136 @@ def handle_download(sock: socket.socket, path: str):
         _send_control(sock, {"type": "error", "payload": str(e)})
 
 
+def _generate_thumbnail(path: str, max_size=(256, 256)) -> bytes:
+    """
+    Generates a thumbnail for image files. 
+    Returns raw bytes of the PNG thumbnail.
+    """
+    try:
+        # Open the file
+        with Image.open(path) as img:
+            # Create a copy to not modify original (and convert to RGB for safety)
+            img = img.convert("RGB")
+            img.thumbnail(max_size)
+            
+            # Save to memory buffer
+            buf = io.BytesIO()
+            img.save(buf, format="PNG", quality = 70)
+            return buf.getvalue()
+    except Exception:
+        return None
+    
+
+def _get_pdf_thumbnail(path: str, num_pages=3) -> bytes:
+    """
+    Captures the first n pages of a PDF and stitches them into a single vertical image.
+    Uses higher DPI for better quality.
+    """
+    try:
+        doc = fitz.open(path)
+        if len(doc) < 1:
+            return None
+            
+        count = min(num_pages, len(doc))
+        
+        images = []
+        total_height = 0
+        max_width = 0
+
+        # Use higher DPI (e.g., 150) for sharper text. 72 is too blurry.
+        zoom_matrix = fitz.Matrix(2.0, 2.0) # Zoom 2x ~ 144 DPI
+
+        for i in range(count):
+            page = doc.load_page(i)
+            
+            # Render page to an image (pixmap) with higher resolution
+            pix = page.get_pixmap(matrix=zoom_matrix, alpha=False)
+            
+            # Convert raw bytes to PIL Image
+            img_data = pix.tobytes("ppm")
+            img = Image.open(io.BytesIO(img_data))
+            
+            images.append(img)
+            total_height += img.height
+            max_width = max(max_width, img.width)
+
+        # Create a blank canvas
+        long_image = Image.new('RGB', (max_width, total_height), (255, 255, 255))
+
+        # Stitch images vertically
+        y_offset = 0
+        for img in images:
+            # Center the image if it's narrower than max_width
+            x_offset = (max_width - img.width) // 2
+            long_image.paste(img, (x_offset, y_offset))
+            y_offset += img.height
+
+        # Optional: Resize if the result is too huge (e.g., restrict width to 1024px)
+        # using LANCZOS filter for high-quality downsampling
+        if max_width > 1024:
+            ratio = 1024 / max_width
+            new_height = int(total_height * ratio)
+            long_image = long_image.resize((1024, new_height), Image.Resampling.LANCZOS)
+
+        # Save to buffer as JPEG (lighter than PNG for photos/scans) with high quality
+        buf = io.BytesIO()
+        long_image.save(buf, format="JPEG", quality=85)
+        return buf.getvalue()
+
+    except Exception as e:
+        print(f"Error PDF thumb: {e}")
+        return None
+    
+
+def handle_preview(sock: socket.socket, path: str):
+    safe_name = os.path.basename(path)
+    
+    if not os.path.exists(path):
+        _send_control(sock, {"type": "error", "payload": "file_not_found"})
+        return
+    # Check file extension to determine how to preview
+    ext = os.path.splitext(safe_name)[1].lower()
+    
+    preview_data = None
+    preview_type = "unknown"
+
+    # STRATEGY 1: Images (Generate Thumbnail)
+    if ext in [".jpg", ".jpeg", ".png", ".bmp", ".gif"]:
+        preview_data = _generate_thumbnail(path)
+        preview_type = "image"
+
+    elif ext in [".pdf"]:
+        preview_data = _get_pdf_thumbnail(path)
+        preview_type = "image" # PDF preview cũng là gửi về 1 tấm ảnh trang bìa
+    
+    # STRATEGY 2: Text Files (Read first 500 bytes)
+    elif ext in [".txt", ".py", ".json", ".md", ".log"]:
+        try:
+            with open(path, "rb") as f:
+                preview_data = f.read(500) # Read only header
+            preview_type = "text"
+        except:
+            pass
+            
+    # STRATEGY 3: Others (Return null or a generic icon logic)
+    else:
+        # For videos/PDFs, you would need complex libraries like opencv-python
+        preview_type = "unsupported"
+
+    if preview_data:
+        size = len(preview_data)
+        # 1. Send Ready signal
+        _send_control(sock, {
+            "type": "preview_ready", 
+            "payload": {"type": preview_type, "size": size}
+        })
+        # 2. Stream the small thumbnail bytes
+        sock.sendall(preview_data)
+        print(f"Sent preview for {safe_name}")
+    else:
+        _send_control(sock, {"type": "error", "payload": "preview_unavailable"})
+
+
 def handle_delete(sock: socket.socket, payload: dict):
     name = payload.get("name")
     if not name:
@@ -332,14 +468,16 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
     print(f"New client: {addr}")
     try:
         while True:
-            data = client_sock.recv(4096)
-            jsonData = data.decode(ENCODING)
-            print(f"-> Json requested: {jsonData}")
-            jsonData = json.loads(jsonData)
 
-            if  jsonData is None:
-                print("error")
+            print(f"=========== NEW REQUEST ============")
+            # data = client_sock.recv(4096)
+            # jsonData = data.decode(ENCODING)
+            jsonData = _recv_control(client_sock)
+            if jsonData is None:
+                print(f"Client {addr} disconnected properly.")
                 break
+            print(f"-> Json requested: {jsonData}")
+            # jsonData = json.loads(jsonData)
             
             command = jsonData.get("command")
             payload = jsonData.get("payload")
@@ -387,6 +525,8 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
             elif command == "download":
                 # The 'path' variable is sanitized by _safe_path and passed directly.
                 handle_download(client_sock, path)
+            elif command == "preview":
+                handle_preview(client_sock, path)
 
             elif command == "delete":
                 handle_delete(client_sock, payload or {})
