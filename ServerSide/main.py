@@ -13,6 +13,7 @@ import fitz # PyMuPDF cho PDF
 import numpy as np
 import tempfile 
 from pydub import AudioSegment
+import zipfile
 
 HOST = "0.0.0.0"
 PORT = 9000
@@ -445,6 +446,86 @@ def _generate_audio_snippet(path: str, duration_sec: int = 5) -> bytes:
         if "ffmpeg" in str(e).lower():
             print("HINT: Make sure ffmpeg is installed and in your PATH.")
         return None
+
+
+def _get_zip_tree_preview(path: str) -> bytes:
+    """
+    Reads the ZIP file structure and returns a JSON Tree 
+    (similar format to load_directory, but for zip contents).
+    """
+    if not zipfile.is_zipfile(path):
+        return None
+
+    try:
+        # 1. Create Root Node
+        root_name = os.path.basename(path)
+        tree = {
+            "name": root_name,
+            "path": ".", # Root in zip is effectively current dir
+            "subdirectories": [],
+            "files": []
+        }
+
+        with zipfile.ZipFile(path, 'r') as z:
+            infolist = z.infolist()
+            
+            # 2. Iterate through each file in the zip to build the tree
+            for info in infolist:
+                # info.filename example: "docs/images/logo.png"
+                parts = info.filename.rstrip('/').split('/')
+                
+                current_node = tree
+                
+                # Check if it represents a directory explicitly
+                is_dir = info.is_dir()
+                
+                # Determine traversal depth
+                depth = len(parts)
+                loop_range = depth if is_dir else depth - 1
+                
+                # Traverse/Build directory structure
+                for i in range(loop_range):
+                    part_name = parts[i]
+                    
+                    # Check if this subdirectory already exists in current_node
+                    found_subdir = None
+                    for sub in current_node["subdirectories"]:
+                        if sub["name"] == part_name:
+                            found_subdir = sub
+                            break
+                    
+                    # If not found, create a new one
+                    if not found_subdir:
+                        new_dir = {
+                            "name": part_name,
+                            "path": "/".join(parts[:i+1]), 
+                            "subdirectories": [],
+                            "files": []
+                        }
+                        current_node["subdirectories"].append(new_dir)
+                        current_node = new_dir
+                    else:
+                        # If found, go deeper
+                        current_node = found_subdir
+                
+                # After traversing parents, if this is a file, append to the last node
+                if not is_dir:
+                    filename = parts[-1]
+                    current_node["files"].append({
+                        "name": filename,
+                        "path": info.filename
+                        # Size removed as requested
+                    })
+
+        # 3. Convert dict to JSON bytes
+        # ensure_ascii=False allows non-English characters in filenames
+        json_str = json.dumps(tree, ensure_ascii=False, indent=2)
+        return json_str.encode('utf-8')
+
+    except Exception as e:
+        print(f"Error zip tree: {e}")
+        error_json = json.dumps({"error": str(e)})
+        return error_json.encode('utf-8')
     
 
 def handle_preview(sock: socket.socket, path: str):
@@ -478,6 +559,11 @@ def handle_preview(sock: socket.socket, path: str):
         preview_data = _generate_audio_snippet(path, duration_sec=1)
         preview_type = "audio"
     
+    elif ext in [".zip"]:
+        print(f"Building tree structure for {safe_name}...")
+        preview_data = _get_zip_tree_preview(path)
+        preview_type = "tree"
+    
     # STRATEGY 2: Text Files (Read first 500 bytes)
     elif ext in [".txt", ".py", ".json", ".md", ".log"]:
         try:
@@ -501,7 +587,7 @@ def handle_preview(sock: socket.socket, path: str):
         })
         # 2. Stream the small thumbnail bytes
         sock.sendall(preview_data)
-        print(f"Sent preview for {safe_name}")
+        print(f"Sent preview for {safe_name} (Type: {preview_type}, Size: {size} bytes)")
     else:
         _send_control(sock, {"type": "error", "payload": "preview_unavailable"})
 
