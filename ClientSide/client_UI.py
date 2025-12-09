@@ -127,12 +127,14 @@ class FileClientApp:
             row=1, column=0, sticky="w", pady=5
         )
         self.host_var_entry = ttk.Entry(input_card)
+        self.host_var_entry.insert(0, self.host)
         self.host_var_entry.grid(row=1, column=1, sticky="ew", padx=10)
 
         ttk.Label(input_card, text="Port:", background="white").grid(
             row=2, column=0, sticky="w", pady=5
         )
         self.port_var_entry = ttk.Entry(input_card)
+        self.port_var_entry.insert(0, str(self.port))
         self.port_var_entry.grid(row=2, column=1, sticky="ew", padx=10)
 
         ttk.Label(input_card, text="Request:", background="white").grid(
