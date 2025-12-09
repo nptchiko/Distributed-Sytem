@@ -1,30 +1,3 @@
-# A simple Python TCP server for a Distributed File System (DFS)-style application.
-# Protocol: length-prefixed JSON control messages + raw binary file data for uploads/downloads.
-#
-# Features implemented to match the "ServerSide" C# DFS intent:
-# - Multiple concurrent clients (thread-per-connection)
-# - List files in server storage
-# - Upload a file (client sends control msg then raw bytes streamed in chunks)
-# - Download a file (server streams file bytes after control msg)
-# - Delete a file
-# - Basic integrity check using SHA256 (sent after upload, validated by server)
-# - Notification broadcasts when files are added/removed
-#
-# Notes:
-# - This is a headless server (no GUI). It stores files under ./storage.
-# - It uses a simple JSON control protocol with a 4-byte length prefix on each control message.
-# - File transfers are chunked and preceded by a control message describing the operation.
-#
-# Example control messages (JSON):
-# {"type":"list"} -> server responds {"type":"list","payload":[{"name":"f.txt","size":1234,"sha256":"..."}]}
-# {"type":"upload","payload":{"name":"f.txt","size":1234,"sha256":"..."}}
-#      After server replies {"type":"ready","payload":null}, client streams exactly `size` bytes raw.
-# {"type":"download","payload":{"name":"f.txt"}} -> server replies {"type":"ready","payload":{"size":1234,"sha256":"..."}} then streams file bytes.
-# {"type":"delete","payload":{"name":"f.txt"}}
-#
-# Run: python server.py [host] [port]
-# Default host=0.0.0.0 port=9000
-
 import os
 import socket
 import threading
@@ -42,8 +15,7 @@ import tempfile
 from pydub import AudioSegment
 
 HOST = "0.0.0.0"
-PORT = 9002     #video
-# PORT = 9001   #image
+PORT = 9000
 ENCODING = "utf-8"
 STORAGE_DIR = os.path.join(os.getcwd(), "storage")
 RECV_BUFFER = 8192
@@ -78,10 +50,12 @@ def _recv_control(sock: socket.socket) -> dict:
     """Receive a 4-byte length-prefixed JSON control message. Returns dict or None on EOF."""
     length_bytes = _recv_all(sock, 4)
     if not length_bytes:
+        print("_RECV_CONTROL: length_bytes is None")
         return None
     length = int.from_bytes(length_bytes, "big")
     payload = _recv_all(sock, length)
     if not payload:
+        print("_RECV_CONTROL: payload is not loaded")
         return None
     try:
         return json.loads(payload.decode(ENCODING))
@@ -220,11 +194,8 @@ def handle_upload(sock: socket.socket, payload: dict):
         _send_control(sock, {"type": "error", "payload": "Invalid upload parameters"})
         return
 
-    try:
-        dst_path = _safe_path(name)
-    except ValueError:
-        _send_control(sock, {"type": "error", "payload": "Invalid path"})
-        return
+    safe_name = os.path.basename(name)
+    dst_path = os.path.join(STORAGE_DIR, safe_name)
 
     # If file exists, we overwrite (could be changed to reject)
     _send_control(sock, {"type": "ready", "payload": None})
@@ -260,7 +231,6 @@ def handle_upload(sock: socket.socket, payload: dict):
             sock,
             {"type": "upload_result", "payload": {"ok": True, "sha256": actual_sha}},
         )
-        safe_name = os.path.basename(dst_path)
         print(f"Uploaded file: {safe_name} ({size} bytes) sha256={actual_sha}")
         _broadcast_system(f"file_added:{safe_name}")
     except Exception as e:
@@ -541,7 +511,7 @@ def handle_delete(sock: socket.socket, payload: dict):
     if not name:
         _send_control(sock, {"type": "error", "payload": "Missing name for delete"})
         return
-    
+
     # safe_name = os.path.basename(name)
     # path = os.path.join(STORAGE_DIR, safe_name)
     try:
@@ -549,7 +519,7 @@ def handle_delete(sock: socket.socket, payload: dict):
     except ValueError:
         _send_control(sock, {"type": "error", "payload": "Invalid path"})
         return
-    
+
     if not os.path.exists(path):
         _send_control(sock, {"type": "error", "payload": "file_not_found"})
         return
@@ -563,16 +533,18 @@ def handle_delete(sock: socket.socket, payload: dict):
         _send_control(sock, {"type": "error", "payload": str(e)})
 
 
-def _safe_path(requested_path):
+def _safe_path(requested_path: str):
 
-    safe_path = requested_path.lstrip('/')
-
+    safe_path = requested_path.replace("storage", "")
+    safe_path = safe_path.lstrip("/")
+    print(f"[DEBUG] SAFE PATH: {requested_path}")
     full_path = os.path.join(STORAGE_DIR, safe_path)
 
     real_path = os.path.realpath(full_path)
 
-    if os.path.commonpath([real_path, STORAGE_DIR]) == STORAGE_DIR: 
+    if os.path.commonprefix([real_path, STORAGE_DIR]) == STORAGE_DIR:
         return real_path
+
     raise ValueError("Invalid path")
 
 
@@ -584,18 +556,17 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
         while True:
 
             print(f"=========== NEW REQUEST ============")
-            # data = client_sock.recv(4096)
-            # jsonData = data.decode(ENCODING)
+
             jsonData = _recv_control(client_sock)
+
             if jsonData is None:
-                print(f"Client {addr} disconnected properly.")
+                print(f"-> Json requested: not found")
                 break
+
             print(f"-> Json requested: {jsonData}")
-            # jsonData = json.loads(jsonData)
-            
+
             command = jsonData.get("command")
             payload = jsonData.get("payload")
-            # path = jsonData.get("path")
             filters = jsonData.get("filters")
 
             try:
@@ -604,20 +575,19 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
                     path = _safe_path(path)
                 else:
                     path = STORAGE_DIR
+                print(f"Path requested: {path}")
             except ValueError as e:
                 _send_control(client_sock, {"type": "error", "payload": str(e)})
                 break
-            
+
             if payload is None:
                 payload = {}
-            
-            if path is None:
-                path = STORAGE_DIR
+            #
+            # if path is None:
+            #     path = STORAGE_DIR
 
             if filters is None:
-                filters = ["all"]
-            
-            print(f"path requested: {path}")
+                filters = []
 
             # ctrl = _recv_control(client_sock)
             # if ctrl is None:
@@ -625,10 +595,6 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
             # typ = ctrl.get("type")
             # payload = ctrl.get("payload")
             if command == "list":
-                if not os.path.isdir(path):
-                    _send_control(client_sock, {"type": "error", "payload": "file_not_found"})
-                    continue
-
                 files = load_directory(path, filters)
                 _send_control(client_sock, {"type": "list", "payload": files})
 
@@ -647,6 +613,9 @@ def handle_client(client_sock: socket.socket, addr: Tuple[str, int]):
 
             elif command == "ping":
                 _send_control(client_sock, {"type": "pong", "payload": None})
+
+            elif command == "preview":
+                handle_preview(client_sock, path)
 
             else:
                 _send_control(
