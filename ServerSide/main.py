@@ -39,6 +39,7 @@ import cv2  # OpenCV cho video
 import fitz # PyMuPDF cho PDF
 import numpy as np
 import tempfile 
+from pydub import AudioSegment
 
 HOST = "0.0.0.0"
 PORT = 9002     #video
@@ -451,6 +452,31 @@ def _generate_video_snippet(path: str, duration_sec: int = 5, target_width: int 
         return None
 
 
+def _generate_audio_snippet(path: str, duration_sec: int = 5) -> bytes:
+    try:
+        # Load audio file (pydub handles mp3, wav, ogg, m4a, etc.)
+        audio = AudioSegment.from_file(path)
+        
+        # pydub works in milliseconds
+        duration_ms = duration_sec * 1000
+        
+        # Slice the audio (if original is shorter, it takes the whole thing)
+        snippet = audio[:duration_ms]
+        
+        # Export to memory buffer as MP3
+        buf = io.BytesIO()
+        snippet.export(buf, format="mp3", bitrate="128k") # 128k is good for preview
+        
+        return buf.getvalue()
+        
+    except Exception as e:
+        print(f"Error generating audio snippet: {e}")
+        # Common error: ffmpeg not found
+        if "ffmpeg" in str(e).lower():
+            print("HINT: Make sure ffmpeg is installed and in your PATH.")
+        return None
+    
+
 def handle_preview(sock: socket.socket, path: str):
     safe_name = os.path.basename(path)
     
@@ -476,6 +502,11 @@ def handle_preview(sock: socket.socket, path: str):
         print(f"Generating 4s preview for {safe_name}...")
         preview_data = _generate_video_snippet(path, duration_sec=5, target_width=640)
         preview_type = "video"
+    
+    elif ext in [".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac"]:
+        print(f"Generating 5s audio preview for {safe_name}...")
+        preview_data = _generate_audio_snippet(path, duration_sec=1)
+        preview_type = "audio"
     
     # STRATEGY 2: Text Files (Read first 500 bytes)
     elif ext in [".txt", ".py", ".json", ".md", ".log"]:
