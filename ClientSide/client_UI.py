@@ -270,12 +270,11 @@ class FileClientApp:
         tree_scroll.pack(side="right", fill="y")
         self.tree.heading("#0", text="Folder / File Name", anchor="w")
 
-<<<<<<< HEAD
-=======
+
         # --- NEW: Bind Click Event to Treeview ---
         self.tree.bind("<<TreeviewSelect>>", self.on_file_select)
 
->>>>>>> 860e23121de0f878909a9810e3b1a29fba1f9f1e
+
         # --- RIGHT FRAME (Modified for Preview) ---
         right_frame = ttk.Frame(body_frame, style="Card.TFrame", padding=15)
         right_frame.pack(side="right", fill="y", anchor="n")
