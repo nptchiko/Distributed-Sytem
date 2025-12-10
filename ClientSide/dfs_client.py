@@ -79,6 +79,10 @@ class DFSClient:
         length = int.from_bytes(length_bytes, "big")
         payload = self._recv_all(length)
         try:
+            print(f"=========== RESPONSE ============")
+            print(payload.decode(ENCODING))
+            print("=================================")
+            print()
             return json.loads(payload.decode(ENCODING))
         except Exception as e:
             raise DFSProtocolError("Invalid control JSON") from e
@@ -86,6 +90,9 @@ class DFSClient:
     def _send_control(self, obj: Dict[str, Any]):
         assert self.sock is not None
         b = json.dumps(obj).encode(ENCODING)
+        print(f"=========== REQUEST ============")
+        print(obj)
+        print("=================================")
         self.sock.sendall(len(b).to_bytes(4, "big") + b)
 
     # author: Quang Minh
@@ -236,20 +243,21 @@ class DFSClient:
         self._send_control(
             {
                 "command": "preview",
-                "payload": {
-                    "path": f"{self.path}{remote_name}",
-                    "filter": _filter(remote_name),
-                },
+                # "payload": {
+                #     "path": os.path.join(self.path, remote_name),
+                #     "filter": _filter(remote_name),
+                # },
+                "path": os.path.join(self.path, remote_name),
             }
         )
 
         ready = self._recv_control()
         if not ready:
             raise DFSProtocolError("No response from server")
-        if ready.get("command") == "error":
+        if ready.get("type") == "error":
             return ready, None
 
-        if ready.get("command") != "ready":
+        if ready.get("type") != "preview_ready":
             raise DFSProtocolError(f"Unexpected control reply: {ready}")
 
         size = int(ready["payload"]["size"])
