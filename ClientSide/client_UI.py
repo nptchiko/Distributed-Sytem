@@ -253,6 +253,9 @@ class FileClientApp:
         ttk.Button(action_frame, text="DOWNLOAD", command=self.on_download_click).pack(
             side="left"
         )
+        ttk.Button(action_frame, text="UPLOAD", command=self.on_upload_click).pack(
+            side="left", padx=(5, 0)
+        )
 
         ttk.Label(
             left_frame, text="File Response List", font=("Segoe UI", 11, "bold")
@@ -600,22 +603,7 @@ class FileClientApp:
                 "Not Connected", "Please connect to the server first."
             )
             return
-
-        local_path = filedialog.askopenfilename(
-            title="Select File to Upload",
-            filetypes=[("All Files", "*.*")],
-        )
-
-        if not local_path:
-            return  # User cancelled
-
-        remote_name_str = self.entry_req.get()
-        remote_name = remote_name_str if remote_name_str.strip() else None
-
-        # Use a thread to avoid blocking the UI
-        threading.Thread(
-            target=self._execute_upload, args=(local_path, remote_name), daemon=True
-        ).start()
+        self.refresh_list()
 
     # def _execute_download(self, remote_path, local_path):
     #     """Helper function to run the download in a separate thread."""
@@ -696,27 +684,6 @@ class FileClientApp:
                 self.root.after(0, lambda e=e: self.log_msg(f"List failed: {e}"))
 
         threading.Thread(target=work, daemon=True).start()
-
-    #
-    # # Author: Quang Minh
-    # # Function: _update_treeview
-    # # Description: Update the file list in the treeview
-    # def _update_treeview(self, files):
-    #     self.tree.delete(*self.tree.get_children())
-    #     if not files:
-    #         self.log_msg("No files found.")
-    #         return
-    #
-    #     for i, f in enumerate(files):
-    #         name = f.get("name", "Unknown")
-    #         size = f.get("size", 0)
-    #         sha = f.get("sha256", "")
-    #
-    #         tag = "odd" if i % 2 != 0 else "even"
-    #         # Insert vào treeview
-    #         self.tree.insert("", "end", text=name, values=(size, sha), tags=(tag,))
-    #
-    #     self.log_msg(f"Updated list with {len(files)} files.")
 
     # Author: Ngoc Huy
     # Function: on_download_click
@@ -804,6 +771,43 @@ class FileClientApp:
                 )
 
         threading.Thread(target=work, daemon=True).start()
+
+    def on_upload_click(self):
+        if not self.is_connected:
+            messagebox.showwarning("Not Connected", "Please connect to the server first.")
+            return
+
+        local_path = filedialog.askopenfilename(
+            title="Select File to Upload",
+            filetypes=[("All Files", "*.*")],
+        )
+
+        if not local_path:
+            return  # User cancelled
+
+        remote_name_str = self.entry_req.get()
+        remote_name = remote_name_str if remote_name_str.strip() else None
+
+        def work():
+            try:
+                self.client.upload_file(local_path, remote_name)
+                self.root.after(
+                    0,
+                    lambda: messagebox.showinfo(
+                        "Success", f"File '{os.path.basename(local_path)}' uploaded successfully."
+                    ),
+                )
+            except Exception as e:
+                self.root.after(
+                    0,
+                    lambda e=e: messagebox.showerror(
+                        "Upload Failed",
+                        f"Failed to upload '{os.path.basename(local_path)}': {e}",
+                    ),
+                )
+
+        threading.Thread(target=work, daemon=True).start()
+
     def on_file_select(self, event):
         if not self.is_connected:
             return
