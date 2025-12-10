@@ -174,6 +174,7 @@ class FileClientApp:
             file_node = {"text": " " + file_name, "image": file_icon}
 
             self.tree.insert(node, tk.END, **file_node)
+        return node
 
     def create_layout(self):
         # ... (Keep Header and Left Frame code exactly the same until 'File Response List') ...
@@ -587,6 +588,12 @@ class FileClientApp:
             filters.append("image")
         if self.check_vars["Video files"].get():
             filters.append("video")
+        if self.check_vars["Text files"].get():
+            filters.append("text")
+        if self.check_vars["Sound files"].get():
+            filters.append("sound")
+        if self.check_vars["Compressed files"].get():
+            filters.append("compressed")
 
         # Nếu không chọn gì cả, mặc định là all
         if not filters:
@@ -668,8 +675,16 @@ class FileClientApp:
                     files = resp["payload"].get("files", [])
                     # Update request
                     self.set_request(f"{DEFAULT_PATH}")
+                    # Update treeview
+                    def populate():
+                        root_node_id = self.populate_tree("", resp["payload"])
+
+                        if root_node_id:
+                            self.tree.item(root_node_id, open=True)
+                        self.root.after(0, lambda: self.log_msg("List updated."))
+                    
                     # Update treeview on main thread
-                    self.root.after(0, lambda: self.populate_tree("", resp["payload"]))
+                    self.root.after(0, lambda: populate() )
 
                 elif resp and resp.get("type") == "error":
                     msg = resp.get("payload")
