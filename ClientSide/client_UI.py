@@ -8,7 +8,8 @@ from dfs_client import DFSClient, DFSProtocolError
 import threading
 import time
 import os
-
+import io
+from PIL import Image, ImageTk
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9000
@@ -803,8 +804,102 @@ class FileClientApp:
                 )
 
         threading.Thread(target=work, daemon=True).start()
+    def on_file_select(self, event):
+        if not self.is_connected:
+            return
 
+        selected_item = self.tree.selection()
+        if not selected_item:
+            return
+    # Author: Ngoc Huy
+    # Function: _get_full_remote_path
+    # Description: Dùng để lấy full path từ node con
+    def _get_full_remote_path(self, item_id):
+        path_parts = []
+        current_id = item_id
 
+        while current_id:
+            item_text = self.tree.item(current_id, "text")
+            clean_name = item_text.lstrip() 
+            path_parts.insert(0, clean_name)
+            current_id = self.tree.parent(current_id)
+        return "/".join(path_parts)
+    # Author: Ngoc Huy
+    # Function: on_file_select
+    # Description: 
+    def on_file_select(self, event):
+        if not self.is_connected:
+            return
+        selected_items = self.tree.selection()
+        if not selected_items:
+            return
+        selected_id = selected_items[0]
+        full_path = self._get_full_remote_path(selected_id)
+        if "." not in os.path.basename(full_path):
+            return 
+        self.txt_preview.pack_forget()
+        self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
+        self.lbl_preview_img.config(image="", text=f"Loading...\n{os.path.basename(full_path)}")
+        threading.Thread(target=self.fetch_preview_data, args=(full_path,), daemon=True).start()
+    # Author: Ngoc Huy
+    # Function: on_file_select
+    # Description:     
+    def fetch_preview_data(self, remote_path):
+        try:
+            data, file_type = self.client.preview_file(remote_path)
+            self.root.after(0, lambda: self.update_ui_preview(data, file_type))
+            
+        except Exception as e:
+            self.root.after(0, lambda: self.update_ui_preview(None, error=str(e)))
+
+    def update_ui_preview(self, data, file_type=None, error=None):
+        
+        # Xử lý lỗi
+        if error:
+            self.txt_preview.pack_forget()
+            self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
+            self.lbl_preview_img.config(image="", text=f"Error:\n{error}")
+            return
+
+        if not data:
+            self.lbl_preview_img.config(text="No Data")
+            return
+
+        valid_images = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'ico']
+        
+        # ================= TRƯỜNG HỢP: ẢNH =================
+        if file_type and file_type.lower() in valid_images:
+            try:
+                pil_image = Image.open(io.BytesIO(data))
+
+                pil_image.thumbnail((240, 240)) 
+                
+                tk_img = ImageTk.PhotoImage(pil_image)
+                
+
+                self.txt_preview.pack_forget()
+                self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
+
+                self.lbl_preview_img.config(image=tk_img, text="")
+                self.lbl_preview_img.image = tk_img 
+                
+            except Exception as e:
+                self.lbl_preview_img.config(image="", text="Image Error")
+
+        # ================= TRƯỜNG HỢP: TEXT =================
+        else:
+            try:
+                text_content = data.decode('utf-8')  
+                self.lbl_preview_img.place_forget() 
+                self.txt_preview.pack(fill="both", expand=True)
+                self.txt_preview.config(state='normal')
+                self.txt_preview.delete("1.0", tk.END)
+                self.txt_preview.insert("1.0", text_content)
+                
+            except UnicodeDecodeError:
+                self.txt_preview.pack_forget()
+                self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
+                self.lbl_preview_img.config(image="", text=f"Binary File\nType: {file_type}\nCannot Preview")
 if __name__ == "__main__":
     root = tk.Tk()
     try:
