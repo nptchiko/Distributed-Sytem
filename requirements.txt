@@ -1,0 +1,4 @@
+opencv-python
+pydub
+PyMuPDF
+Pillow
