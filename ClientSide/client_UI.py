@@ -39,6 +39,9 @@ class FileClientApp:
             "white": "#ffffff",
         }
 
+        # Placeholder for the current preview image to prevent garbage collection
+        self.current_image = None
+
         self.setup_styles()
         self.create_layout()
 
@@ -267,6 +270,12 @@ class FileClientApp:
         tree_scroll.pack(side="right", fill="y")
         self.tree.heading("#0", text="Folder / File Name", anchor="w")
 
+<<<<<<< HEAD
+=======
+        # --- NEW: Bind Click Event to Treeview ---
+        self.tree.bind("<<TreeviewSelect>>", self.on_file_select)
+
+>>>>>>> 860e23121de0f878909a9810e3b1a29fba1f9f1e
         # --- RIGHT FRAME (Modified for Preview) ---
         right_frame = ttk.Frame(body_frame, style="Card.TFrame", padding=15)
         right_frame.pack(side="right", fill="y", anchor="n")
@@ -788,6 +797,7 @@ class FileClientApp:
 
             except Exception as e:
 
+<<<<<<< HEAD
                 # Cập nhật UI khi lỗi
                 error_msg = str(e)
 
@@ -894,6 +904,9 @@ class FileClientApp:
                 self.txt_preview.pack_forget()
                 self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
                 self.lbl_preview_img.config(image="", text=f"Binary File\nType: {file_type}\nCannot Preview")
+=======
+
+>>>>>>> 860e23121de0f878909a9810e3b1a29fba1f9f1e
 if __name__ == "__main__":
     root = tk.Tk()
     try:
