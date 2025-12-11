@@ -389,23 +389,28 @@ class FileClientApp:
         if not self.client_socket:
             self.update_ui_preview(None, "Not Connected")
             return
-        
+
         try:
             # 1. SEND REQUEST (Using logic from previous turn)
-            _send_control(self.client_socket, {"type": "preview", "payload": {"name": filename}})
-        
+            _send_control(
+                self.client_socket, {"type": "preview", "payload": {"name": filename}}
+            )
+
             # 2. RECEIVE RESPONSE
             resp = _recv_control(self.client_socket)
-        
+
             # SIMULATED RESPONSE FOR UI TESTING:
             import time
-            time.sleep(0.5) # Simulate network lag
-        
+
+            time.sleep(0.5)  # Simulate network lag
+
             # Logic to handle response:
-            if resp['type'] == 'preview_ready':
-               data = _recv_all(self.client_socket, resp['payload']['size'])
-               self.root.after(0, self.update_ui_preview, data, resp['payload']['type'])
-        
+            if resp["type"] == "preview_ready":
+                data = _recv_all(self.client_socket, resp["payload"]["size"])
+                self.root.after(
+                    0, self.update_ui_preview, data, resp["payload"]["type"]
+                )
+
             pass
         except Exception as e:
             print(f"Preview error: {e}")
@@ -422,26 +427,25 @@ class FileClientApp:
             try:
                 # Load image from bytes
                 pil_image = Image.open(io.BytesIO(data))
-        
+
                 # Resize to fit container (250x250)
                 pil_image.thumbnail((240, 240))
                 tk_img = ImageTk.PhotoImage(pil_image)
-        
+
                 # Update Label
-                self.current_image = tk_img # Keep reference!
+                self.current_image = tk_img  # Keep reference!
                 self.lbl_preview_img.config(image=tk_img, text="")
             except Exception:
                 self.lbl_preview_img.config(image="", text="Image Error")
-        
+
         elif p_type == "text" and data:
             self.lbl_preview_img.pack_forget()
             self.txt_preview.pack(fill="both", expand=True)
             self.txt_preview.delete("1.0", tk.END)
             self.txt_preview.insert("1.0", data.decode("utf-8"))
-        
+
         else:
             self.lbl_preview_img.config(image="", text="No Preview Available")
-    
 
     # ---- UI helpers ----
     # Author: Quang Minh
@@ -584,6 +588,12 @@ class FileClientApp:
             filters.append("image")
         if self.check_vars["Video files"].get():
             filters.append("video")
+        if self.check_vars["Text files"].get():
+            filters.append("text")
+        if self.check_vars["Sound files"].get():
+            filters.append("sound")
+        if self.check_vars["Compressed files"].get():
+            filters.append("compressed")
 
         # Nếu không chọn gì cả, mặc định là all
         if not filters:
@@ -804,6 +814,7 @@ class FileClientApp:
                 )
 
         threading.Thread(target=work, daemon=True).start()
+
     def on_file_select(self, event):
         if not self.is_connected:
             return
@@ -811,6 +822,7 @@ class FileClientApp:
         selected_item = self.tree.selection()
         if not selected_item:
             return
+
     # Author: Ngoc Huy
     # Function: _get_full_remote_path
     # Description: Dùng để lấy full path từ node con
@@ -820,13 +832,14 @@ class FileClientApp:
 
         while current_id:
             item_text = self.tree.item(current_id, "text")
-            clean_name = item_text.lstrip() 
+            clean_name = item_text.lstrip()
             path_parts.insert(0, clean_name)
             current_id = self.tree.parent(current_id)
         return "/".join(path_parts)
+
     # Author: Ngoc Huy
     # Function: on_file_select
-    # Description: 
+    # Description:
     def on_file_select(self, event):
         if not self.is_connected:
             return
@@ -836,24 +849,29 @@ class FileClientApp:
         selected_id = selected_items[0]
         full_path = self._get_full_remote_path(selected_id)
         if "." not in os.path.basename(full_path):
-            return 
+            return
         self.txt_preview.pack_forget()
         self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
-        self.lbl_preview_img.config(image="", text=f"Loading...\n{os.path.basename(full_path)}")
-        threading.Thread(target=self.fetch_preview_data, args=(full_path,), daemon=True).start()
+        self.lbl_preview_img.config(
+            image="", text=f"Loading...\n{os.path.basename(full_path)}"
+        )
+        threading.Thread(
+            target=self.fetch_preview_data, args=(full_path,), daemon=True
+        ).start()
+
     # Author: Ngoc Huy
     # Function: on_file_select
-    # Description:     
+    # Description:
     def fetch_preview_data(self, remote_path):
         try:
             data, file_type = self.client.preview_file(remote_path)
             self.root.after(0, lambda: self.update_ui_preview(data, file_type))
-            
+
         except Exception as e:
             self.root.after(0, lambda e=e: self.update_ui_preview(None, error=str(e)))
 
     # def update_ui_preview(self, data, file_type=None, error=None):
-        
+
     #     # Xử lý lỗi
     #     if error:
     #         self.txt_preview.pack_forget()
@@ -866,36 +884,35 @@ class FileClientApp:
     #         return
 
     #     valid_images = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'ico']
-        
+
     #     # ================= TRƯỜNG HỢP: ẢNH =================
     #     if file_type and file_type.lower() in valid_images:
     #         try:
     #             pil_image = Image.open(io.BytesIO(data))
 
-    #             pil_image.thumbnail((240, 240)) 
-                
+    #             pil_image.thumbnail((240, 240))
+
     #             tk_img = ImageTk.PhotoImage(pil_image)
-                
 
     #             self.txt_preview.pack_forget()
     #             self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
 
     #             self.lbl_preview_img.config(image=tk_img, text="")
-    #             self.lbl_preview_img.image = tk_img 
-                
+    #             self.lbl_preview_img.image = tk_img
+
     #         except Exception as e:
     #             self.lbl_preview_img.config(image="", text="Image Error")
 
     #     # ================= TRƯỜNG HỢP: TEXT =================
     #     else:
     #         try:
-    #             text_content = data.decode('utf-8')  
-    #             self.lbl_preview_img.place_forget() 
+    #             text_content = data.decode('utf-8')
+    #             self.lbl_preview_img.place_forget()
     #             self.txt_preview.pack(fill="both", expand=True)
     #             self.txt_preview.config(state='normal')
     #             self.txt_preview.delete("1.0", tk.END)
     #             self.txt_preview.insert("1.0", text_content)
-                
+
     #         except UnicodeDecodeError:
     #             self.txt_preview.pack_forget()
     #             self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
