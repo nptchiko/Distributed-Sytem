@@ -715,14 +715,14 @@ class FileClientApp:
 
         while current_id:
             item_text = self.tree.item(current_id, "text")
-            clean_name = item_text.lstrip() 
+            clean_name = item_text.lstrip()
             path_parts.insert(0, clean_name)
             current_id = self.tree.parent(current_id)
         return "/".join(path_parts)
         
     # Author: Ngoc Huy
     # Function: on_file_select
-    # Description: 
+    # Description:
     def on_file_select(self, event):
         if not self.is_connected:
             return
@@ -732,7 +732,7 @@ class FileClientApp:
         selected_id = selected_items[0]
         full_path = self._get_full_remote_path(selected_id)
         if "." not in os.path.basename(full_path):
-            return 
+            return
         self.txt_preview.pack_forget()
         self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
         self.lbl_preview_img.config(image="", text=f"Loading...\n{os.path.basename(full_path)}")
@@ -746,7 +746,7 @@ class FileClientApp:
 
     # Author: Ngoc Huy
     # Function: on_file_select
-    # Description:     
+    # Description:
     def fetch_preview_data(self, remote_path):
         # Author: Quang Minh
         # Fix: Implement timeout mechanism using threading
