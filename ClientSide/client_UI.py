@@ -748,6 +748,7 @@ class FileClientApp:
     # Function: on_file_select
     # Description:     
     def fetch_preview_data(self, remote_path):
+        # Author: Quang Minh
         # Fix: Implement timeout mechanism using threading
         # Shared state to track if result is ready
         # OLD:
