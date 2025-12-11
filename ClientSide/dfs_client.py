@@ -80,7 +80,7 @@ class DFSClient:
         payload = self._recv_all(length)
         try:
             print(f"=========== RESPONSE ============")
-            print(payload.decode(ENCODING))
+            print(json.dumps(payload.decode(ENCODING), indent=2))
             print("=================================")
             print()
             return json.loads(payload.decode(ENCODING))

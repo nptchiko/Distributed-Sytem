@@ -5,3 +5,5 @@ numpy
 pydub
 audioop-lts
 PyYAML
+pygame
+json2txttree

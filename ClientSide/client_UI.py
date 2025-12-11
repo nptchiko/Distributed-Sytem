@@ -1,7 +1,7 @@
 # This is new UI client code with improved structure and features.
 # Designed by Ngoc Huy
 # Imported and modified logic by Quang Minh
-
+import json
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from dfs_client import DFSClient, DFSProtocolError
@@ -9,6 +9,8 @@ import threading
 import time
 import os
 import io
+import pygame  # -> de xu li am thanh
+from json2txttree import json2txttree  # -> xu li zip
 from PIL import Image, ImageTk
 
 DEFAULT_HOST = "127.0.0.1"
@@ -27,6 +29,8 @@ class FileClientApp:
         self.path = path
         self.client = DFSClient(self.host, self.port)
         self.worker_lock = threading.Lock()
+
+        pygame.mixer.init()
 
         self.client = None
         self.is_connected = False
@@ -361,8 +365,6 @@ class FileClientApp:
             self.preview_container, height=15, width=30, font=("Consolas", 8)
         )
 
-    
-
     # ---- UI helpers ----
     # Author: Quang Minh
     # Function: log_msg
@@ -550,6 +552,7 @@ class FileClientApp:
                     files = resp["payload"].get("files", [])
                     # Update request
                     self.set_request(f"{DEFAULT_PATH}")
+
                     # Update treeview
                     def populate():
                         root_node_id = self.populate_tree("", resp["payload"])
@@ -557,9 +560,9 @@ class FileClientApp:
                         if root_node_id:
                             self.tree.item(root_node_id, open=True)
                         self.root.after(0, lambda: self.log_msg("List updated."))
-                    
+
                     # Update treeview on main thread
-                    self.root.after(0, lambda: populate() )
+                    self.root.after(0, lambda: populate())
 
                 elif resp and resp.get("type") == "error":
                     msg = resp.get("payload")
@@ -664,7 +667,9 @@ class FileClientApp:
 
     def on_upload_click(self):
         if not self.is_connected:
-            messagebox.showwarning("Not Connected", "Please connect to the server first.")
+            messagebox.showwarning(
+                "Not Connected", "Please connect to the server first."
+            )
             return
 
         local_path = filedialog.askopenfilename(
@@ -684,7 +689,8 @@ class FileClientApp:
                 self.root.after(
                     0,
                     lambda: messagebox.showinfo(
-                        "Success", f"File '{os.path.basename(local_path)}' uploaded successfully."
+                        "Success",
+                        f"File '{os.path.basename(local_path)}' uploaded successfully.",
                     ),
                 )
             except Exception as e:
@@ -697,14 +703,6 @@ class FileClientApp:
                 )
 
         threading.Thread(target=work, daemon=True).start()
-
-    def on_file_select(self, event):
-        if not self.is_connected:
-            return
-
-        selected_item = self.tree.selection()
-        if not selected_item:
-            return
 
     # Author: Ngoc Huy
     # Function: _get_full_remote_path
@@ -719,7 +717,7 @@ class FileClientApp:
             path_parts.insert(0, clean_name)
             current_id = self.tree.parent(current_id)
         return "/".join(path_parts)
-        
+
     # Author: Ngoc Huy
     # Function: on_file_select
     # Description:
@@ -729,13 +727,17 @@ class FileClientApp:
         selected_items = self.tree.selection()
         if not selected_items:
             return
+
         selected_id = selected_items[0]
         full_path = self._get_full_remote_path(selected_id)
         if "." not in os.path.basename(full_path):
             return
+
         self.txt_preview.pack_forget()
         self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
-        self.lbl_preview_img.config(image="", text=f"Loading...\n{os.path.basename(full_path)}")
+        self.lbl_preview_img.config(
+            image="", text=f"Loading...\n{os.path.basename(full_path)}"
+        )
         # Author: Quang Minh
         # FIX: Call fetch_preview_data in a separate thread to avoid blocking UI
         # OLD:
@@ -743,6 +745,26 @@ class FileClientApp:
         # NEW:
         self.fetch_preview_data(full_path)
 
+    # Author: chiko
+    # Description: Lay file am thanh tu client roi update UI
+    # Function: play_audio_data
+    def stop_audio(self):
+        if pygame.mixer.music.get_busy():
+            pygame.mixer.music.stop()
+
+    def play_audio_data(self, data):
+
+        try:
+            self.stop_audio()  # Stop any previous song
+
+            # Use io.BytesIO to treat raw bytes like a file
+            audio_file = io.BytesIO(data)
+
+            pygame.mixer.music.load(audio_file)
+            pygame.mixer.music.play()
+        except Exception as e:
+            print(f"Audio playback error: {e}")
+            self.lbl_preview_img.config(text="Audio Error")
 
     # Author: Ngoc Huy
     # Function: on_file_select
@@ -759,21 +781,26 @@ class FileClientApp:
         #     messagebox.showerror("Preview Error", f"Failed to preview file:\n {e}")
         # NEW:
         # Shared state to track if result is ready
-        result_state = {'finished': False}
+        result_state = {"finished": False}
         data_lock = threading.Lock()
 
         def timer_task():
-            time.sleep(5) # Ngủ đúng 5 giây
-            
+            time.sleep(5)  # Ngủ đúng 5 giây
+
             with data_lock:
                 # Dậy kiểm tra xem Worker xong chưa
-                if not result_state['finished']:
+                if not result_state["finished"]:
                     # Nếu chưa xong -> Đánh dấu là đã xong (để chặn Worker update sau này)
-                    result_state['finished'] = True
-                    
+                    result_state["finished"] = True
+
                     # Update UI báo lỗi Timeout -> Ngắt luồng hiển thị
-                    self.root.after(0, lambda: self.update_ui_preview(None, None, error="Preview Timeout (5s)"))
-                    # Lưu ý: Thread worker vẫn có thể chạy ngầm đến khi socket timeout, 
+                    self.root.after(
+                        0,
+                        lambda: self.update_ui_preview(
+                            None, None, error="Preview Timeout (5s)"
+                        ),
+                    )
+                    # Lưu ý: Thread worker vẫn có thể chạy ngầm đến khi socket timeout,
                     # nhưng kết quả của nó sẽ bị bỏ qua nhờ biến 'finished'.
 
         def work():
@@ -781,20 +808,25 @@ class FileClientApp:
                 data, file_type = self.client.preview_file(remote_path)
                 with data_lock:
                     # Kiểm tra xem đã timeout chưa
-                    if result_state['finished']:
+                    if result_state["finished"]:
                         return  # Đã timeout, bỏ qua kết quả này
-                    
+
                     # Đánh dấu là đã hoàn thành
-                    result_state['finished'] = True
+                    result_state["finished"] = True
                     # Cập nhật UI từ luồng chính
                     self.root.after(0, lambda: self.update_ui_preview(data, file_type))
-                                
+
             except Exception as e:
                 with data_lock:
-                    if result_state['finished']:
+                    if result_state["finished"]:
                         return
-                    result_state['finished'] = True
-                self.root.after(0, lambda e=e: messagebox.showerror("Preview Error", f"Failed to preview file:\n {e}"))
+                    result_state["finished"] = True
+                self.root.after(
+                    0,
+                    lambda e=e: messagebox.showerror(
+                        "Preview Error", f"Failed to preview file:\n {e}"
+                    ),
+                )
 
         threading.Thread(target=timer_task, daemon=True).start()
         threading.Thread(target=work, daemon=True).start()
@@ -810,25 +842,41 @@ class FileClientApp:
             try:
                 # Load image from bytes
                 pil_image = Image.open(io.BytesIO(data))
-        
+
                 # Resize to fit container (250x250)
                 pil_image.thumbnail((240, 240))
                 tk_img = ImageTk.PhotoImage(pil_image)
-        
+
                 # Update Label
-                self.current_image = tk_img # Keep reference!
+                self.current_image = tk_img  # Keep reference!
                 self.lbl_preview_img.config(image=tk_img, text="")
             except Exception:
                 self.lbl_preview_img.config(image="", text="Image Error")
-        
+
         elif p_type == "text" and data:
             self.lbl_preview_img.pack_forget()
             self.txt_preview.pack(fill="both", expand=True)
             self.txt_preview.delete("1.0", tk.END)
             self.txt_preview.insert("1.0", data.decode("utf-8"))
-        
+
+        elif p_type == "audio" and data:
+            self.lbl_preview_img.pack(fill="both", expand=True)
+            # You can replace this text with a "Music Note" icon if you have one
+            self.lbl_preview_img.config(
+                image="", text="🎵\nPlaying Audio Snippet...", font=("Segoe UI", 12)
+            )
+            # Play the sound
+            self.play_audio_data(data)
+        elif p_type == "tree" and data:
+            tree_data = json.dumps(data.decode("utf-8"))
+            self.lbl_preview_img.pack_forget()
+            self.txt_preview.pack(fill="both", expand=True)
+            self.txt_preview.delete("1.0", tk.END)
+            self.txt_preview.insert(tk.END, tree_data)
+            #
         else:
             self.lbl_preview_img.config(image="", text="No Preview Available")
+
 
 if __name__ == "__main__":
     root = tk.Tk()
