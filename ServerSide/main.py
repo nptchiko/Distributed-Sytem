@@ -11,7 +11,7 @@ import io
 import cv2  # OpenCV cho video
 import fitz # PyMuPDF cho PDF
 import numpy as np
-import tempfile 
+import tempfile
 from pydub import AudioSegment
 import zipfile
 
@@ -267,7 +267,7 @@ def handle_download(sock: socket.socket, path: str):
 
 def _generate_thumbnail(path: str, max_size=(256, 256)) -> bytes:
     """
-    Generates a thumbnail for image files. 
+    Generates a thumbnail for image files.
     Returns raw bytes of the PNG thumbnail.
     """
     try:
@@ -276,14 +276,14 @@ def _generate_thumbnail(path: str, max_size=(256, 256)) -> bytes:
             # Create a copy to not modify original (and convert to RGB for safety)
             img = img.convert("RGB")
             img.thumbnail(max_size)
-            
+
             # Save to memory buffer
             buf = io.BytesIO()
             img.save(buf, format="PNG", quality = 70)
             return buf.getvalue()
     except Exception:
         return None
-    
+
 
 def _get_pdf_thumbnail(path: str, num_pages=3) -> bytes:
     """
@@ -294,9 +294,9 @@ def _get_pdf_thumbnail(path: str, num_pages=3) -> bytes:
         doc = fitz.open(path)
         if len(doc) < 1:
             return None
-            
+
         count = min(num_pages, len(doc))
-        
+
         images = []
         total_height = 0
         max_width = 0
@@ -306,14 +306,14 @@ def _get_pdf_thumbnail(path: str, num_pages=3) -> bytes:
 
         for i in range(count):
             page = doc.load_page(i)
-            
+
             # Render page to an image (pixmap) with higher resolution
             pix = page.get_pixmap(matrix=zoom_matrix, alpha=False)
-            
+
             # Convert raw bytes to PIL Image
             img_data = pix.tobytes("ppm")
             img = Image.open(io.BytesIO(img_data))
-            
+
             images.append(img)
             total_height += img.height
             max_width = max(max_width, img.width)
@@ -355,10 +355,10 @@ def _generate_video_snippet(path: str, duration_sec: int = 5, target_width: int 
         # Get original properties
         orig_fps = cap.get(cv2.CAP_PROP_FPS)
         if orig_fps <= 0: orig_fps = 24.0
-        
+
         orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        
+
         # CALCULATE NEW DIMENSIONS (Resize)
         if orig_width > target_width:
             scale_ratio = target_width / orig_width
@@ -369,10 +369,10 @@ def _generate_video_snippet(path: str, duration_sec: int = 5, target_width: int 
             new_height = orig_height
 
         target_fps = 24.0
-        
+
         # If original is already low FPS (e.g. 10fps), keep it, don't fake frames.
         final_fps = min(orig_fps, target_fps)
-        
+
         # Calculate frame skipping step
         max_frames_to_read = int(orig_fps * duration_sec)
 
@@ -380,42 +380,42 @@ def _generate_video_snippet(path: str, duration_sec: int = 5, target_width: int 
         with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as tmp_file:
             temp_path = tmp_file.name
 
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(temp_path, fourcc, final_fps, (new_width, new_height))
 
         frames_read = 0
         frames_written = 0
-        
+
         while frames_read < max_frames_to_read:
             ret, frame = cap.read()
             if not ret:
                 break
-            
+
             # Smart frame dropping logic to match target FPS
             # 'frames_written' to match the time of 'frames_read'
             expected_frames = int(frames_read * (final_fps / orig_fps))
-            
+
             if frames_written <= expected_frames:
                 # Resize uses INTER_LINEAR which is faster than INTER_AREA and good for up to 640px
                 resized_frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
                 out.write(resized_frame)
                 frames_written += 1
-            
+
             frames_read += 1
 
         cap.release()
         out.release()
-        
+
         # Read bytes
         video_bytes = None
         with open(temp_path, "rb") as f:
             video_bytes = f.read()
-            
+
         try:
             os.remove(temp_path)
         except:
             pass
-            
+
         return video_bytes
 
     except Exception as e:
@@ -427,19 +427,19 @@ def _generate_audio_snippet(path: str, duration_sec: int = 5) -> bytes:
     try:
         # Load audio file (pydub handles mp3, wav, ogg, m4a, etc.)
         audio = AudioSegment.from_file(path)
-        
+
         # pydub works in milliseconds
         duration_ms = duration_sec * 1000
-        
+
         # Slice the audio (if original is shorter, it takes the whole thing)
         snippet = audio[:duration_ms]
-        
+
         # Export to memory buffer as MP3
         buf = io.BytesIO()
         snippet.export(buf, format="mp3", bitrate="128k") # 128k is good for preview
-        
+
         return buf.getvalue()
-        
+
     except Exception as e:
         print(f"Error generating audio snippet: {e}")
         # Common error: ffmpeg not found
@@ -450,7 +450,7 @@ def _generate_audio_snippet(path: str, duration_sec: int = 5) -> bytes:
 
 def _get_zip_tree_preview(path: str) -> bytes:
     """
-    Reads the ZIP file structure and returns a JSON Tree 
+    Reads the ZIP file structure and returns a JSON Tree
     (similar format to load_directory, but for zip contents).
     """
     if not zipfile.is_zipfile(path):
@@ -468,37 +468,37 @@ def _get_zip_tree_preview(path: str) -> bytes:
 
         with zipfile.ZipFile(path, 'r') as z:
             infolist = z.infolist()
-            
+
             # 2. Iterate through each file in the zip to build the tree
             for info in infolist:
                 # info.filename example: "docs/images/logo.png"
                 parts = info.filename.rstrip('/').split('/')
-                
+
                 current_node = tree
-                
+
                 # Check if it represents a directory explicitly
                 is_dir = info.is_dir()
-                
+
                 # Determine traversal depth
                 depth = len(parts)
                 loop_range = depth if is_dir else depth - 1
-                
+
                 # Traverse/Build directory structure
                 for i in range(loop_range):
                     part_name = parts[i]
-                    
+
                     # Check if this subdirectory already exists in current_node
                     found_subdir = None
                     for sub in current_node["subdirectories"]:
                         if sub["name"] == part_name:
                             found_subdir = sub
                             break
-                    
+
                     # If not found, create a new one
                     if not found_subdir:
                         new_dir = {
                             "name": part_name,
-                            "path": "/".join(parts[:i+1]), 
+                            "path": "/".join(parts[:i+1]),
                             "subdirectories": [],
                             "files": []
                         }
@@ -507,7 +507,7 @@ def _get_zip_tree_preview(path: str) -> bytes:
                     else:
                         # If found, go deeper
                         current_node = found_subdir
-                
+
                 # After traversing parents, if this is a file, append to the last node
                 if not is_dir:
                     filename = parts[-1]
@@ -526,17 +526,17 @@ def _get_zip_tree_preview(path: str) -> bytes:
         print(f"Error zip tree: {e}")
         error_json = json.dumps({"error": str(e)})
         return error_json.encode('utf-8')
-    
+
 
 def handle_preview(sock: socket.socket, path: str):
     safe_name = os.path.basename(path)
-    
+
     if not os.path.exists(path):
         _send_control(sock, {"type": "error", "payload": "file_not_found"})
         return
     # Check file extension to determine how to preview
     ext = os.path.splitext(safe_name)[1].lower()
-    
+
     preview_data = None
     preview_type = "unknown"
 
@@ -547,23 +547,23 @@ def handle_preview(sock: socket.socket, path: str):
 
     elif ext in [".pdf"]:
         preview_data = _get_pdf_thumbnail(path)
-        preview_type = "image" 
+        preview_type = "image"
 
     elif ext in [".mp4", ".avi", ".mkv", ".mov", ".webm"]:
         print(f"Generating 4s preview for {safe_name}...")
         preview_data = _generate_video_snippet(path, duration_sec=5, target_width=640)
         preview_type = "video"
-    
+
     elif ext in [".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac"]:
         print(f"Generating 5s audio preview for {safe_name}...")
         preview_data = _generate_audio_snippet(path, duration_sec=1)
         preview_type = "audio"
-    
+
     elif ext in [".zip"]:
         print(f"Building tree structure for {safe_name}...")
         preview_data = _get_zip_tree_preview(path)
         preview_type = "tree"
-    
+
     # STRATEGY 2: Text Files (Read first 500 bytes)
     elif ext in [".txt", ".py", ".json", ".md", ".log"]:
         try:
@@ -572,7 +572,7 @@ def handle_preview(sock: socket.socket, path: str):
             preview_type = "text"
         except:
             pass
-            
+
     # STRATEGY 3: Others (Return null or a generic icon logic)
     else:
         # For videos/PDFs, you would need complex libraries like opencv-python
@@ -582,7 +582,7 @@ def handle_preview(sock: socket.socket, path: str):
         size = len(preview_data)
         # 1. Send Ready signal
         _send_control(sock, {
-            "type": "preview_ready", 
+            "type": "preview_ready",
             "payload": {"type": preview_type, "size": size}
         })
         # 2. Stream the small thumbnail bytes
