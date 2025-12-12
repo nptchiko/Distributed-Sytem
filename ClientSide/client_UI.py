@@ -5,12 +5,13 @@ import json
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from dfs_client import DFSClient, DFSProtocolError
+from VideoPreviewPlayer import VideoPreviewPlayer
 import threading
 import time
 import os
 import io
 import pygame  # -> de xu li am thanh
-from json2txttree import json2txttree  # -> xu li zip
+import tempfile
 from PIL import Image, ImageTk
 
 DEFAULT_HOST = "127.0.0.1"
@@ -359,11 +360,13 @@ class FileClientApp:
             self.preview_container, bg="#ecf0f1", text="No Preview"
         )
         self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
+        self.lbl_preview_img.pack(fill="both", expand=True)
 
         # Text Widget for Text Previews (Initially Hidden)
         self.txt_preview = tk.Text(
             self.preview_container, height=15, width=30, font=("Consolas", 8)
         )
+        self.video_player = VideoPreviewPlayer(self.lbl_preview_img)
 
     # ---- UI helpers ----
     # Author: Quang Minh
@@ -722,6 +725,10 @@ class FileClientApp:
     # Function: on_file_select
     # Description:
     def on_file_select(self, event):
+
+        self.stop_audio()
+        self.video_player.stop()
+
         if not self.is_connected:
             return
         selected_items = self.tree.selection()
@@ -732,6 +739,8 @@ class FileClientApp:
         full_path = self._get_full_remote_path(selected_id)
         if "." not in os.path.basename(full_path):
             return
+
+        self.set_request(full_path)
 
         self.txt_preview.pack_forget()
         self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
@@ -874,6 +883,22 @@ class FileClientApp:
             self.txt_preview.delete("1.0", tk.END)
             self.txt_preview.insert(tk.END, tree_data)
             #
+        elif p_type == "video" and data:
+            try:
+                # Write data to temp file
+                self.temp_video = tempfile.NamedTemporaryFile(
+                    suffix=".mp4", delete=False
+                )
+                self.temp_video.write(data)
+                self.temp_video.close()
+
+                # Load and Play
+                self.video_player.load(self.temp_video.name)
+                self.video_player.play()
+
+            except Exception as e:
+                print(f"Video error: {e}")
+                self.lbl_preview_img.config(text="Video Error")
         else:
             self.lbl_preview_img.config(image="", text="No Preview Available")
 
