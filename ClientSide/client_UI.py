@@ -828,6 +828,16 @@ class FileClientApp:
             self.txt_preview.delete("1.0", tk.END)
             self.txt_preview.insert("1.0", data.decode("utf-8"))
         
+        elif p_type=="audio" and data:
+            icon_path = "assets/audio_placeholder.png"
+            try: 
+                pil_icon = Image.open(icon_path);
+                pil_icon.thumbnail((240, 240))
+                tk_icon = ImageTk.PhotoImage(pil_icon)
+                self.current_image = tk_icon 
+                self.lbl_preview_img.config(image=tk_icon, text="")
+            except Exception:
+                self.lbl_preview_img.config(image="", text="Audio Error")
         else:
             self.lbl_preview_img.config(image="", text="No Preview Available")
 
