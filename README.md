@@ -1,4 +1,10 @@
 # Distributed-Sytem
+### Run dependencies:
+```bash
+python -m venv env
+source env/bin/activate
+env/bin/pip3 install -r requirements.txt
+```
 Liệt kê:
 <img width="1194" height="938" alt="image" src="https://github.com/user-attachments/assets/a29c8b2a-aee7-4935-95aa-ed8d71ede4ac" />
 

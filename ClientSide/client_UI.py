@@ -174,6 +174,7 @@ class FileClientApp:
             file_node = {"text": " " + file_name, "image": file_icon}
 
             self.tree.insert(node, tk.END, **file_node)
+        return node
 
     def create_layout(self):
         # ... (Keep Header and Left Frame code exactly the same until 'File Response List') ...
@@ -223,12 +224,14 @@ class FileClientApp:
             row=1, column=0, sticky="w", pady=5
         )
         self.host_var_entry = ttk.Entry(input_card)
+        self.host_var_entry.insert(0, self.host)
         self.host_var_entry.grid(row=1, column=1, sticky="ew", padx=10)
 
         ttk.Label(input_card, text="Port:", background="white").grid(
             row=2, column=0, sticky="w", pady=5
         )
         self.port_var_entry = ttk.Entry(input_card)
+        self.port_var_entry.insert(0, str(self.port))
         self.port_var_entry.grid(row=2, column=1, sticky="ew", padx=10)
 
         ttk.Label(input_card, text="Request:", background="white").grid(
@@ -250,6 +253,9 @@ class FileClientApp:
         )
         ttk.Button(action_frame, text="DOWNLOAD", command=self.on_download_click).pack(
             side="left"
+        )
+        ttk.Button(action_frame, text="UPLOAD", command=self.on_upload_click).pack(
+            side="left", padx=(5, 0)
         )
 
         ttk.Label(
@@ -355,91 +361,7 @@ class FileClientApp:
             self.preview_container, height=15, width=30, font=("Consolas", 8)
         )
 
-    def on_file_select(self, event):
-        pass
-
-        # CODE mẫu tham khảo: nhớ xóa khi xong chức năng
-        # selected_item = self.tree.selection()
-        # if not selected_item:
-        #     return
-        #
-        # file_name = self.tree.item(selected_item[0], "text")
-        #
-        # # Reset Preview Panel
-        # self.lbl_preview_img.config(image="", text="Loading...")
-        # self.txt_preview.pack_forget()
-        # self.lbl_preview_img.pack(fill="both", expand=True)
-        #
-        # # In a real app, check if it's a file or folder before requesting
-        # # For now, we assume everything is a file and request preview
-        # threading.Thread(target=self.fetch_preview_data, args=(file_name,), daemon=True).start()
-        #
-
-    # --- NEW: Fetch logic (Connects to your socket code) ---
-    def fetch_preview_data(self, filename):
-        """
-        This function simulates the network request.
-        Replace the logic inside with your actual socket _send_control calls.
-        """
-        pass
-        # CODE mẫu tham khảo: nhớ xóa khi xong chức năng
-
-        # if not self.client_socket:
-        #     self.update_ui_preview(None, "Not Connected")
-        #     return
-        #
-        # try:
-        #     # 1. SEND REQUEST (Using logic from previous turn)
-        #     # _send_control(self.client_socket, {"type": "preview", "payload": {"name": filename}})
-        #
-        #     # 2. RECEIVE RESPONSE
-        #     # resp = _recv_control(self.client_socket)
-        #
-        #     # SIMULATED RESPONSE FOR UI TESTING:
-        #     import time
-        #     time.sleep(0.5) # Simulate network lag
-        #
-        #     # Logic to handle response:
-        #     # if resp['type'] == 'preview_ready':
-        #     #    data = _recv_all(self.client_socket, resp['payload']['size'])
-        #     #    self.root.after(0, self.update_ui_preview, data, resp['payload']['type'])
-        #
-        #     pass
-        # except Exception as e:
-        #     print(f"Preview error: {e}")
-
-    # --- NEW: Update UI from Main Thread ---
-    def update_ui_preview(self, data, p_type):
-        """
-        Called by the thread to update the UI safely.
-        """
-        pass
-
-    # CODE mẫu tham khảo: nhớ xóa khi xong chức năng
-    # if p_type == "image" and data:
-    #     try:
-    #         # Load image from bytes
-    #         pil_image = Image.open(io.BytesIO(data))
-    #
-    #         # Resize to fit container (250x250)
-    #         pil_image.thumbnail((240, 240))
-    #         tk_img = ImageTk.PhotoImage(pil_image)
-    #
-    #         # Update Label
-    #         self.current_image = tk_img # Keep reference!
-    #         self.lbl_preview_img.config(image=tk_img, text="")
-    #     except Exception:
-    #         self.lbl_preview_img.config(image="", text="Image Error")
-    #
-    # elif p_type == "text" and data:
-    #     self.lbl_preview_img.pack_forget()
-    #     self.txt_preview.pack(fill="both", expand=True)
-    #     self.txt_preview.delete("1.0", tk.END)
-    #     self.txt_preview.insert("1.0", data.decode("utf-8"))
-    #
-    # else:
-    #     self.lbl_preview_img.config(image="", text="No Preview Available")
-    #
+    
 
     # ---- UI helpers ----
     # Author: Quang Minh
@@ -582,6 +504,12 @@ class FileClientApp:
             filters.append("image")
         if self.check_vars["Video files"].get():
             filters.append("video")
+        if self.check_vars["Text files"].get():
+            filters.append("text")
+        if self.check_vars["Sound files"].get():
+            filters.append("sound")
+        if self.check_vars["Compressed files"].get():
+            filters.append("compressed")
 
         # Nếu không chọn gì cả, mặc định là all
         if not filters:
@@ -598,64 +526,8 @@ class FileClientApp:
                 "Not Connected", "Please connect to the server first."
             )
             return
+        self.refresh_list()
 
-        local_path = filedialog.askopenfilename(
-            title="Select File to Upload",
-            filetypes=[("All Files", "*.*")],
-        )
-
-        if not local_path:
-            return  # User cancelled
-
-        remote_name_str = self.entry_req.get()
-        remote_name = remote_name_str if remote_name_str.strip() else None
-
-        # Use a thread to avoid blocking the UI
-        threading.Thread(
-            target=self._execute_upload, args=(local_path, remote_name), daemon=True
-        ).start()
-
-    # def _execute_download(self, remote_path, local_path):
-    #     """Helper function to run the download in a separate thread."""
-    #     try:
-    #         if not self.client:
-    #             # This should not happen if is_connected is true, but as a safeguard
-    #             raise Exception("Client not initialized.")
-    #
-    #         result = self.client.download_file(remote_path, local_path)
-    #
-    #         if result and result.get("payload", {}).get("ok"):
-    #             self.root.after(
-    #                 0,
-    #                 lambda: messagebox.showinfo(
-    #                     "Success",
-    #                     f"File '{os.path.basename(remote_path)}' downloaded successfully.",
-    #                 ),
-    #             )
-    #         else:
-    #             error_msg = result.get("payload", {}).get(
-    #                 "error", "Unknown download error."
-    #             )
-    #             self.root.after(
-    #                 0,
-    #                 lambda: messagebox.showerror(
-    #                     "Download Failed",
-    #                     f"Failed to download '{os.path.basename(remote_path)}': {error_msg}",
-    #                 ),
-    #             )
-    #     except Exception as e:
-    #         self.root.after(
-    #             0,
-    #             lambda: messagebox.showerror(
-    #                 "Download Error", f"An error occurred during download: {e}"
-    #             ),
-    #         )
-    #     """Nút Send Request: Thực chất là gửi lệnh List với các Filter đã chọn"""
-    #     if not self.is_connected:
-    #         messagebox.showwarning("Warning", "Please connect to server first.")
-    #         return
-    #     self.refresh_list()
-    #
     # ---- File operations ----
     # Author: Quang Minh
     # Function: refresh_list
@@ -678,8 +550,16 @@ class FileClientApp:
                     files = resp["payload"].get("files", [])
                     # Update request
                     self.set_request(f"{DEFAULT_PATH}")
+                    # Update treeview
+                    def populate():
+                        root_node_id = self.populate_tree("", resp["payload"])
+
+                        if root_node_id:
+                            self.tree.item(root_node_id, open=True)
+                        self.root.after(0, lambda: self.log_msg("List updated."))
+                    
                     # Update treeview on main thread
-                    self.root.after(0, lambda: self.populate_tree("", resp["payload"]))
+                    self.root.after(0, lambda: populate() )
 
                 elif resp and resp.get("type") == "error":
                     msg = resp.get("payload")
@@ -695,32 +575,11 @@ class FileClientApp:
 
         threading.Thread(target=work, daemon=True).start()
 
-    #
-    # # Author: Quang Minh
-    # # Function: _update_treeview
-    # # Description: Update the file list in the treeview
-    # def _update_treeview(self, files):
-    #     self.tree.delete(*self.tree.get_children())
-    #     if not files:
-    #         self.log_msg("No files found.")
-    #         return
-    #
-    #     for i, f in enumerate(files):
-    #         name = f.get("name", "Unknown")
-    #         size = f.get("size", 0)
-    #         sha = f.get("sha256", "")
-    #
-    #         tag = "odd" if i % 2 != 0 else "even"
-    #         # Insert vào treeview
-    #         self.tree.insert("", "end", text=name, values=(size, sha), tags=(tag,))
-    #
-    #     self.log_msg(f"Updated list with {len(files)} files.")
-
     # Author: Ngoc Huy
     # Function: on_download_click
     # Description: Handle file download with safe directory creation and threading
     def on_download_click(self):
-        if not self.is_connected:
+        if not self.is_connected or not self.client:
             messagebox.showwarning("Cảnh Báo", "Hãy kết nối với sever trước khi tải !")
             return
 
@@ -802,6 +661,43 @@ class FileClientApp:
                 )
 
         threading.Thread(target=work, daemon=True).start()
+
+    def on_upload_click(self):
+        if not self.is_connected:
+            messagebox.showwarning("Not Connected", "Please connect to the server first.")
+            return
+
+        local_path = filedialog.askopenfilename(
+            title="Select File to Upload",
+            filetypes=[("All Files", "*.*")],
+        )
+
+        if not local_path:
+            return  # User cancelled
+
+        remote_name_str = self.entry_req.get()
+        remote_name = remote_name_str if remote_name_str.strip() else None
+
+        def work():
+            try:
+                self.client.upload_file(local_path, remote_name)
+                self.root.after(
+                    0,
+                    lambda: messagebox.showinfo(
+                        "Success", f"File '{os.path.basename(local_path)}' uploaded successfully."
+                    ),
+                )
+            except Exception as e:
+                self.root.after(
+                    0,
+                    lambda e=e: messagebox.showerror(
+                        "Upload Failed",
+                        f"Failed to upload '{os.path.basename(local_path)}': {e}",
+                    ),
+                )
+
+        threading.Thread(target=work, daemon=True).start()
+
     def on_file_select(self, event):
         if not self.is_connected:
             return
@@ -809,7 +705,95 @@ class FileClientApp:
         selected_item = self.tree.selection()
         if not selected_item:
             return
+    # Author: Ngoc Huy
+    # Function: _get_full_remote_path
+    # Description: Dùng để lấy full path từ node con
+    def _get_full_remote_path(self, item_id):
+        path_parts = []
+        current_id = item_id
 
+        while current_id:
+            item_text = self.tree.item(current_id, "text")
+            clean_name = item_text.lstrip() 
+            path_parts.insert(0, clean_name)
+            current_id = self.tree.parent(current_id)
+        return "/".join(path_parts)
+    # Author: Ngoc Huy
+    # Function: on_file_select
+    # Description: 
+    def on_file_select(self, event):
+        if not self.is_connected:
+            return
+        selected_items = self.tree.selection()
+        if not selected_items:
+            return
+        selected_id = selected_items[0]
+        full_path = self._get_full_remote_path(selected_id)
+        if "." not in os.path.basename(full_path):
+            return 
+        self.txt_preview.pack_forget()
+        self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
+        self.lbl_preview_img.config(image="", text=f"Loading...\n{os.path.basename(full_path)}")
+        threading.Thread(target=self.fetch_preview_data, args=(full_path,), daemon=True).start()
+    # Author: Ngoc Huy
+    # Function: on_file_select
+    # Description:     
+    def fetch_preview_data(self, remote_path):
+        try:
+            data, file_type = self.client.preview_file(remote_path)
+            self.root.after(0, lambda: self.update_ui_preview(data, file_type))
+            
+        except Exception as e:
+            self.root.after(0, lambda: self.update_ui_preview(None, error=str(e)))
+
+    def update_ui_preview(self, data, file_type=None, error=None):
+        
+        # Xử lý lỗi
+        if error:
+            self.txt_preview.pack_forget()
+            self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
+            self.lbl_preview_img.config(image="", text=f"Error:\n{error}")
+            return
+
+        if not data:
+            self.lbl_preview_img.config(text="No Data")
+            return
+
+        valid_images = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'ico']
+        
+        # ================= TRƯỜNG HỢP: ẢNH =================
+        if file_type and file_type.lower() in valid_images:
+            try:
+                pil_image = Image.open(io.BytesIO(data))
+
+                pil_image.thumbnail((240, 240)) 
+                
+                tk_img = ImageTk.PhotoImage(pil_image)
+                
+
+                self.txt_preview.pack_forget()
+                self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
+
+                self.lbl_preview_img.config(image=tk_img, text="")
+                self.lbl_preview_img.image = tk_img 
+                
+            except Exception as e:
+                self.lbl_preview_img.config(image="", text="Image Error")
+
+        # ================= TRƯỜNG HỢP: TEXT =================
+        else:
+            try:
+                text_content = data.decode('utf-8')  
+                self.lbl_preview_img.place_forget() 
+                self.txt_preview.pack(fill="both", expand=True)
+                self.txt_preview.config(state='normal')
+                self.txt_preview.delete("1.0", tk.END)
+                self.txt_preview.insert("1.0", text_content)
+                
+            except UnicodeDecodeError:
+                self.txt_preview.pack_forget()
+                self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
+                self.lbl_preview_img.config(image="", text=f"Binary File\nType: {file_type}\nCannot Preview")
 if __name__ == "__main__":
     root = tk.Tk()
     try:
