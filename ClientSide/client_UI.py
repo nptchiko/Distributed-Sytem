@@ -839,16 +839,20 @@ class FileClientApp:
 
         threading.Thread(target=timer_task, daemon=True).start()
         threading.Thread(target=work, daemon=True).start()
+    def update_ui_preview(self, data, p_type):
+        """
+        Called by the thread to update the UI safely.
+        """
+        # pass
 
         if not data:
             self.lbl_preview_img.config(text="No Data")
             return
 
-        valid_images = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'ico']
-        
-        # ================= TRƯỜNG HỢP: ẢNH =================
-        if file_type and file_type.lower() in valid_images:
+
+        if p_type == "image" and data:
             try:
+                # Load image from bytes
                 pil_image = Image.open(io.BytesIO(data))
 
                 # Resize to fit container (250x250)
@@ -858,10 +862,9 @@ class FileClientApp:
                 # Update Label
                 self.current_image = tk_img  # Keep reference!
                 self.lbl_preview_img.config(image=tk_img, text="")
-                self.lbl_preview_img.image = tk_img 
-                
-            except Exception as e:
-                self.lbl_preview_img.config(image="", text="Image Error")
+            except Exception:
+                self.lbl_preview_img.config(image="", text="Image Error")        
+        # ================= TRƯỜNG HỢP: ẢNH =================
 
         elif p_type == "text" and data:
             self.lbl_preview_img.pack_forget()
