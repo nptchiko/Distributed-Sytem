@@ -146,6 +146,83 @@ class Coordinator:
             print(f"Error forwarding to {server_address}: {e}")
             return {"status": "error", "message": "Server offline"}
 
+    def handle_upload(self, sock: socket.socket, req: dict):
+        payload = req["payload"]
+        path = payload["name"]
+        size = int(payload.get("size", 0))
+
+        target_server = self._get_target_server_by_path(path)
+
+        if not target_server:
+            self._send_packet(
+                sock, {"type": "error", "payload": "File type not supported"}
+            )
+            return
+
+        try:
+            srv_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            srv_sock.settimeout(10)
+            srv_sock.connect(target_server)
+            self._send_packet(srv_sock, req)
+
+            # Forward Header
+            len_bytes = srv_sock.recv(4)
+            if not len_bytes:
+                self._send_packet(
+                    sock, {"type": "error", "payload": "server_no_response"}
+                )
+                srv_sock.close()
+                return
+            sock.sendall(len_bytes)
+
+            # Forward JSON
+            json_len = struct.unpack("!I", len_bytes)[0]
+            json_data = b""
+            while len(json_data) < json_len:
+                chunk = srv_sock.recv(min(4096, json_len - len(json_data)))
+                if not chunk:
+                    break
+                json_data += chunk
+            sock.sendall(json_data)
+
+            resp = json.loads(json_data.decode("utf-8"))
+
+            if resp.get("type") == "ready":
+                data = bytearray()
+
+                chunk = sock.recv(size)
+                if not chunk:
+                    raise EOFError("Connection closed while reading")
+                data.extend(chunk)
+
+                data = bytes(data)
+                srv_sock.sendall(data)
+
+            # Return result
+            # Forward Header
+            len_bytes = srv_sock.recv(4)
+            if not len_bytes:
+                self._send_packet(
+                    sock, {"type": "error", "payload": "server_no_response"}
+                )
+                srv_sock.close()
+                return
+            sock.sendall(len_bytes)
+
+            # Forward JSON
+            json_len = struct.unpack("!I", len_bytes)[0]
+            json_data = b""
+            while len(json_data) < json_len:
+                chunk = srv_sock.recv(min(4096, json_len - len(json_data)))
+                if not chunk:
+                    break
+                json_data += chunk
+            sock.sendall(json_data)
+
+            srv_sock.close()
+        except Exception as e:
+            print(f"[ERROR] Uploading: {e}")
+
     def handle_preview(self, sock: socket.socket, req: dict):
         path = req["path"]
         target_server = self._get_target_server_by_path(path)
@@ -482,6 +559,9 @@ class Coordinator:
 
                 elif command == "preview":
                     self.handle_preview(client_sock, request)
+
+                elif command == "upload":
+                    self.handle_upload(client_sock, request)
 
                 # --- UNKNOWN COMMAND ---
                 else:

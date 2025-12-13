@@ -18,6 +18,7 @@ Usage:
     c.close()
 """
 
+from __future__ import print_function
 import socket
 import json
 import hashlib
@@ -80,7 +81,7 @@ class DFSClient:
         payload = self._recv_all(length)
         try:
             print(f"=========== RESPONSE ============")
-            print(payload.decode(ENCODING))
+            print(json.dumps(payload.decode(ENCODING), indent=2))
             print("=================================")
             print()
             return json.loads(payload.decode(ENCODING))
@@ -133,7 +134,11 @@ class DFSClient:
                     break
                 h.update(chunk)
         sha = h.hexdigest()
-        name = remote_name or os.path.basename(local_path)
+        print(f"[DEBUG] LOCAL PATH: {local_path} {remote_name}")
+
+        name = os.path.dirname(remote_name) + "/" + os.path.basename(local_path)
+
+        print(f"[DEBUG] FILE NAME: {name}")
         # Send control
         self._send_control(
             {
@@ -142,7 +147,7 @@ class DFSClient:
             }
         )
         ready = self._recv_control()
-        if not ready or ready.get("command") != "ready":
+        if not ready or ready.get("type") != "ready":
             raise DFSProtocolError(f"Server refused upload: {ready}")
         # stream file bytes
         sent = 0
