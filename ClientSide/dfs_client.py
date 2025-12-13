@@ -18,6 +18,7 @@ Usage:
     c.close()
 """
 
+from __future__ import print_function
 import socket
 import json
 import hashlib
@@ -79,6 +80,10 @@ class DFSClient:
         length = int.from_bytes(length_bytes, "big")
         payload = self._recv_all(length)
         try:
+            print(f"=========== RESPONSE ============")
+            print(json.dumps(payload.decode(ENCODING), indent=2))
+            print("=================================")
+            print()
             return json.loads(payload.decode(ENCODING))
         except Exception as e:
             raise DFSProtocolError("Invalid control JSON") from e
@@ -86,6 +91,9 @@ class DFSClient:
     def _send_control(self, obj: Dict[str, Any]):
         assert self.sock is not None
         b = json.dumps(obj).encode(ENCODING)
+        print(f"=========== REQUEST ============")
+        print(obj)
+        print("=================================")
         self.sock.sendall(len(b).to_bytes(4, "big") + b)
 
     # author: Quang Minh
@@ -126,7 +134,11 @@ class DFSClient:
                     break
                 h.update(chunk)
         sha = h.hexdigest()
-        name = remote_name or os.path.basename(local_path)
+        print(f"[DEBUG] LOCAL PATH: {local_path} {remote_name}")
+
+        name = os.path.dirname(remote_name) + "/" + os.path.basename(local_path)
+
+        print(f"[DEBUG] FILE NAME: {name}")
         # Send control
         self._send_control(
             {
@@ -135,7 +147,7 @@ class DFSClient:
             }
         )
         ready = self._recv_control()
-        if not ready or ready.get("command") != "ready":
+        if not ready or ready.get("type") != "ready":
             raise DFSProtocolError(f"Server refused upload: {ready}")
         # stream file bytes
         sent = 0
@@ -201,7 +213,7 @@ class DFSClient:
         #     raise DFSProtocolError(f"Unexpected control reply: {ready}")
 
         if ready["type"] == "error":
-            return ready
+            raise DFSProtocolError(f"Error when downloading: {ready}")
         if ready["type"] != "ready":
             raise DFSProtocolError(f"Unexpected control reply: {ready}")
 
@@ -236,20 +248,21 @@ class DFSClient:
         self._send_control(
             {
                 "command": "preview",
-                "payload": {
-                    "path": f"{self.path}{remote_name}",
-                    "filter": _filter(remote_name),
-                },
+                # "payload": {
+                #     "path": os.path.join(self.path, remote_name),
+                #     "filter": _filter(remote_name),
+                # },
+                "path": os.path.join(self.path, remote_name),
             }
         )
 
         ready = self._recv_control()
         if not ready:
             raise DFSProtocolError("No response from server")
-        if ready.get("command") == "error":
+        if ready.get("type") == "error":
             return ready, None
 
-        if ready.get("command") != "ready":
+        if ready.get("type") != "preview_ready":
             raise DFSProtocolError(f"Unexpected control reply: {ready}")
 
         size = int(ready["payload"]["size"])

@@ -1,0 +1,9 @@
+Pillow
+opencv-python
+PyMuPDF
+numpy
+pydub
+audioop-lts
+PyYAML
+pygame
+

@@ -1,14 +1,18 @@
 # This is new UI client code with improved structure and features.
 # Designed by Ngoc Huy
 # Imported and modified logic by Quang Minh
-
+import json
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from dfs_client import DFSClient, DFSProtocolError
+from VideoPreviewPlayer import VideoPreviewPlayer
 import threading
 import time
 import os
-
+import io
+import pygame  # -> de xu li am thanh
+import tempfile
+from PIL import Image, ImageTk
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9000
@@ -19,7 +23,7 @@ class FileClientApp:
     def __init__(self, root, host=DEFAULT_HOST, port=DEFAULT_PORT, path=DEFAULT_PATH):
         self.root = root
         self.root.title("UI Client")
-        self.root.geometry("900x650")
+        self.root.geometry("1200x950")
 
         self.host = host
         self.port = port
@@ -27,7 +31,9 @@ class FileClientApp:
         self.client = DFSClient(self.host, self.port)
         self.worker_lock = threading.Lock()
 
-        self.client_socket = None
+        pygame.mixer.init()
+
+        self.client = None
         self.is_connected = False
 
         self.colors = {
@@ -78,6 +84,102 @@ class FileClientApp:
             "TButton",
             background=[("active", self.colors["accent"]), ("!disabled", "#bdc3c7")],
         )
+        self.icons = {}
+        self.load_icons()
+
+    def load_icons(self):
+        self.icons["file"] = tk.PhotoImage(file="./assets/ic_file.png")
+        self.icons["folder"] = tk.PhotoImage(file="./assets/ic_dir.png")
+        self.icons["image"] = tk.PhotoImage(file="./assets/ic_image.png")
+        self.icons["sound"] = tk.PhotoImage(file="./assets/ic_sound.png")
+        self.icons["video"] = tk.PhotoImage(file="./assets/ic_video.png")
+        self.icons["zip"] = tk.PhotoImage(file="./assets/ic_zip.png")
+        self.icons["docs"] = tk.PhotoImage(file="./assets/ic_text.png")
+
+    def _get_icon(self, file_path):
+        """Return a specific icon based on file extension, or a default."""
+        ext = os.path.splitext(file_path)[1].lower()
+
+        if ext in [".jpg", ".jpeg", ".png", ".gif"]:
+            return self.icons.get("image")
+
+        if ext in [".mp4", ".mkv", ".webm", ".flv"]:
+            return self.icons.get("video")
+
+        if ext in [".mp3", ".m4p", ".m4a", ".flac"]:
+            return self.icons.get("sound")
+
+        if ext in [".txt", ".pdf", ".doc", ".docx"]:
+            return self.icons.get("docs")
+
+        if ext in [".rar", ".zip"]:
+            return self.icons.get("zip")
+        # Add more rules here for video, text, etc.
+        return self.icons.get("file")
+
+    # Author: Tien
+    #### EXAMPLE
+    #    {
+    #   "name": "storage",
+    #   "path": "storage/",
+    #   "subdirectories": [
+    #     {
+    #       "name": "dir1",
+    #       "path": "storage/dir1",
+    #       "subdirectories": [],
+    #       "files": [
+    #         {
+    #           "name": "text.txt",
+    #           "path": "storage/dir1/text.txt"
+    #         }
+    #
+    #     }
+    #   ],
+    #   "files": [
+    #     {
+    #       "name": "0dca72984a2f14751488c6b37068ca2e.jpg",
+    #       "path": "storage/0dca72984a2f14751488c6b37068ca2e.jpg"
+    #     },
+    #     {
+    #       "name": "Video_2025-11-15_01-49-29.mp4",
+    #       "path": "storage/a.mp4"
+    #     }
+    #   ]
+    # }
+    #
+
+    def populate_tree(self, parent, data: dict):
+
+        # Assuming 'data' is a list of dicts with 'name' and 'children' keys
+
+        name = data.get("name")
+        path = data.get("path")
+        subdir: list = data.get("subdirectories")
+        files: list = data.get("files")
+
+        directory_icon = self.icons.get("folder")
+
+        directory_node = {"text": " " + name}
+
+        if directory_icon:
+            directory_node["image"] = directory_icon
+
+        node = self.tree.insert(parent, "end", **directory_node)
+
+        if subdir is not []:
+            for dir in subdir:
+                self.populate_tree(node, dir)
+
+        for file in files:
+            file_name = file.get("name") or "Untitled"
+            file_path = file.get("path")
+
+            file_icon = self._get_icon(file_name)
+
+            file_node = {"text": " " + file_name, "image": file_icon}
+
+            self.tree.insert(node, tk.END, **file_node)
+        return node
 
     def create_layout(self):
         # ... (Keep Header and Left Frame code exactly the same until 'File Response List') ...
@@ -127,12 +229,14 @@ class FileClientApp:
             row=1, column=0, sticky="w", pady=5
         )
         self.host_var_entry = ttk.Entry(input_card)
+        self.host_var_entry.insert(0, self.host)
         self.host_var_entry.grid(row=1, column=1, sticky="ew", padx=10)
 
         ttk.Label(input_card, text="Port:", background="white").grid(
             row=2, column=0, sticky="w", pady=5
         )
         self.port_var_entry = ttk.Entry(input_card)
+        self.port_var_entry.insert(0, str(self.port))
         self.port_var_entry.grid(row=2, column=1, sticky="ew", padx=10)
 
         ttk.Label(input_card, text="Request:", background="white").grid(
@@ -155,6 +259,9 @@ class FileClientApp:
         ttk.Button(action_frame, text="DOWNLOAD", command=self.on_download_click).pack(
             side="left"
         )
+        ttk.Button(action_frame, text="UPLOAD", command=self.on_upload_click).pack(
+            side="left", padx=(5, 0)
+        )
 
         ttk.Label(
             left_frame, text="File Response List", font=("Segoe UI", 11, "bold")
@@ -169,12 +276,9 @@ class FileClientApp:
 
         self.tree.pack(side="left", fill="both", expand=True)
         tree_scroll.pack(side="right", fill="y")
-
         self.tree.heading("#0", text="Folder / File Name", anchor="w")
 
-        self.tree.tag_configure("odd", background="#f8f9fa")
-        self.tree.tag_configure("even", background="#ffffff")
-
+        # --- RIGHT FRAME (Modified for Preview) ---
         right_frame = ttk.Frame(body_frame, style="Card.TFrame", padding=15)
         right_frame.pack(side="right", fill="y", anchor="n")
 
@@ -230,9 +334,39 @@ class FileClientApp:
             font=("Segoe UI", 10, "bold"),
             background="white",
         ).pack(anchor="w")
-        self.log_text = tk.Text(right_frame, height=15, width=30, font=("Consolas", 8))
+        self.log_text = tk.Text(right_frame, height=10, width=30, font=("Consolas", 8))
         self.log_text.pack(fill="both", expand=True, pady=(5, 0))
         self.log_text.config(state="disabled")
+
+        # Handle event when a file is selected
+        self.tree.bind("<<TreeviewSelect>>", self.on_file_select)
+
+        ### PREVIEW SECTION
+        ttk.Label(
+            right_frame,
+            text="File Preview",
+            font=("Segoe UI", 12, "bold"),
+            background="white",
+        ).pack(anchor="w", pady=(0, 10))
+
+        self.preview_container = tk.Frame(
+            right_frame, bg="white", height=250, width=250
+        )
+        self.preview_container.pack(fill="both", expand=True)
+        self.preview_container.pack_propagate(False)  # Force size
+
+        # Label for Image Previews
+        self.lbl_preview_img = tk.Label(
+            self.preview_container, bg="#ecf0f1", text="No Preview"
+        )
+        self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
+        self.lbl_preview_img.pack(fill="both", expand=True)
+
+        # Text Widget for Text Previews (Initially Hidden)
+        self.txt_preview = tk.Text(
+            self.preview_container, height=15, width=30, font=("Consolas", 8)
+        )
+        self.video_player = VideoPreviewPlayer(self.lbl_preview_img)
 
     # ---- UI helpers ----
     # Author: Quang Minh
@@ -375,6 +509,12 @@ class FileClientApp:
             filters.append("image")
         if self.check_vars["Video files"].get():
             filters.append("video")
+        if self.check_vars["Text files"].get():
+            filters.append("text")
+        if self.check_vars["Sound files"].get():
+            filters.append("sound")
+        if self.check_vars["Compressed files"].get():
+            filters.append("compressed")
 
         # Nếu không chọn gì cả, mặc định là all
         if not filters:
@@ -386,9 +526,10 @@ class FileClientApp:
     # Function: on_send_click
     # Description: Handle Send Request button click
     def on_send_click(self):
-        """Nút Send Request: Thực chất là gửi lệnh List với các Filter đã chọn"""
         if not self.is_connected:
-            messagebox.showwarning("Warning", "Please connect to server first.")
+            messagebox.showwarning(
+                "Not Connected", "Please connect to the server first."
+            )
             return
         self.refresh_list()
 
@@ -405,14 +546,27 @@ class FileClientApp:
 
         def work():
             try:
+
+                for i in self.tree.get_children():
+                    self.tree.delete(i)
                 # Call list_files with filters
                 resp = self.client.list_files(filter=filters)
                 if resp and resp.get("type") == "list":  # Server returned file list
                     files = resp["payload"].get("files", [])
                     # Update request
                     self.set_request(f"{DEFAULT_PATH}")
+
+                    # Update treeview
+                    def populate():
+                        root_node_id = self.populate_tree("", resp["payload"])
+
+                        if root_node_id:
+                            self.tree.item(root_node_id, open=True)
+                        self.root.after(0, lambda: self.log_msg("List updated."))
+
                     # Update treeview on main thread
-                    self.root.after(0, lambda: self._update_treeview(files))
+                    self.root.after(0, lambda: populate())
+
                 elif resp and resp.get("type") == "error":
                     msg = resp.get("payload")
                     self.root.after(0, lambda: self.log_msg(f"Server Error: {msg}"))
@@ -427,31 +581,11 @@ class FileClientApp:
 
         threading.Thread(target=work, daemon=True).start()
 
-    # Author: Quang Minh
-    # Function: _update_treeview
-    # Description: Update the file list in the treeview
-    def _update_treeview(self, files):
-        self.tree.delete(*self.tree.get_children())
-        if not files:
-            self.log_msg("No files found.")
-            return
-
-        for i, f in enumerate(files):
-            name = f.get("name", "Unknown")
-            size = f.get("size", 0)
-            sha = f.get("sha256", "")
-
-            tag = "odd" if i % 2 != 0 else "even"
-            # Insert vào treeview
-            self.tree.insert("", "end", text=name, values=(size, sha), tags=(tag,))
-
-        self.log_msg(f"Updated list with {len(files)} files.")
-
     # Author: Ngoc Huy
     # Function: on_download_click
     # Description: Handle file download with safe directory creation and threading
     def on_download_click(self):
-        if not self.is_connected:
+        if not self.is_connected or not self.client:
             messagebox.showwarning("Cảnh Báo", "Hãy kết nối với sever trước khi tải !")
             return
 
@@ -460,8 +594,10 @@ class FileClientApp:
         if not selected_item:
             messagebox.showwarning("Cảnh Báo", "Hãy chọn file bạn muốn tải !")
             return
-
+        print(len(selected_item))
         file_name = self.tree.item(selected_item[0])["text"]
+        file_name = file_name.removeprefix(" ")
+        print(file_name)
 
         local_path = filedialog.asksaveasfilename(
             title="Save File", initialfile=file_name, defaultextension=".*"
@@ -481,8 +617,28 @@ class FileClientApp:
                     self.root.after(
                         0, lambda: self.log_msg(f"Created directory: {directory}")
                     )
+                ### FIX
+                ### Author: chiko
+                ### Description: handle khi tải file trong folder
 
-                self.client.download_file(file_name, local_path)
+                remote_path = ""  # -> storage
+                child_id = selected_item[0]
+                parent_id = self.tree.parent(child_id)
+
+                while child_id:
+                    remote_path = os.path.join(
+                        self.tree.item(child_id, "text").removeprefix(" "), remote_path
+                    )
+                    child_id = parent_id
+                    parent_id = self.tree.parent(child_id)
+
+                # Xoa dau / cuoi
+                remote_path = remote_path[:-1]
+
+                self.set_request(remote_path)
+                print(f"remote path: {remote_path}")
+
+                self.client.download_file(remote_path, local_path)
 
                 # Cập nhật UI khi thành công
                 self.root.after(
@@ -496,16 +652,259 @@ class FileClientApp:
                 )
 
             except Exception as e:
+
                 # Cập nhật UI khi lỗi
-                self.root.after(0, lambda: self.log_msg(f"Download failed: {str(e)}"))
+                error_msg = str(e)
+
                 self.root.after(
                     0,
                     lambda: messagebox.showerror(
-                        "Error", f"Failed to download file:\n{str(e)}"
+                        "Error", f"Failed to download file:\n {error_msg}"
+                    ),
+                )
+                self.root.after(
+                    0, lambda: self.log_msg(f"Download failed: {error_msg}")
+                )
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def on_upload_click(self):
+        if not self.is_connected:
+            messagebox.showwarning(
+                "Not Connected", "Please connect to the server first."
+            )
+            return
+
+        local_path = filedialog.askopenfilename(
+            title="Select File to Upload",
+            filetypes=[("All Files", "*.*")],
+        )
+
+        if not local_path:
+            return  # User cancelled
+
+        remote_name_str = self.entry_req.get()
+        remote_name = remote_name_str if remote_name_str.strip() else None
+
+        def work():
+            try:
+                self.client.upload_file(local_path, remote_name)
+                self.root.after(
+                    0,
+                    lambda: messagebox.showinfo(
+                        "Success",
+                        f"File '{os.path.basename(local_path)}' uploaded successfully.",
+                    ),
+                )
+            except Exception as e:
+                self.root.after(
+                    0,
+                    lambda e=e: messagebox.showerror(
+                        "Upload Failed",
+                        f"Failed to upload '{os.path.basename(local_path)}': {e}",
                     ),
                 )
 
         threading.Thread(target=work, daemon=True).start()
+
+    # Author: Ngoc Huy
+    # Function: _get_full_remote_path
+    # Description: Dùng để lấy full path từ node con
+    def _get_full_remote_path(self, item_id):
+        path_parts = []
+        current_id = item_id
+
+        while current_id:
+            item_text = self.tree.item(current_id, "text")
+            clean_name = item_text.lstrip() 
+            path_parts.insert(0, clean_name)
+            current_id = self.tree.parent(current_id)
+        return "/".join(path_parts)
+
+    # Author: Ngoc Huy
+    # Function: on_file_select
+    # Description: 
+    def on_file_select(self, event):
+
+        self.stop_audio()
+        self.video_player.stop()
+
+        if not self.is_connected:
+            return
+        selected_items = self.tree.selection()
+        if not selected_items:
+            return
+
+        selected_id = selected_items[0]
+        full_path = self._get_full_remote_path(selected_id)
+        if "." not in os.path.basename(full_path):
+            return
+
+        self.set_request(full_path)
+
+        self.txt_preview.pack_forget()
+        self.lbl_preview_img.place(relx=0.5, rely=0.5, anchor="center")
+        self.lbl_preview_img.config(
+            image="", text=f"Loading...\n{os.path.basename(full_path)}"
+        )
+        # Author: Quang Minh
+        # FIX: Call fetch_preview_data in a separate thread to avoid blocking UI
+        # OLD:
+        # threading.Thread(target=self.fetch_preview_data, args=(full_path,), daemon=True).start()
+        # NEW:
+        self.fetch_preview_data(full_path)
+
+    # Author: chiko
+    # Description: Lay file am thanh tu client roi update UI
+    # Function: play_audio_data
+    def stop_audio(self):
+        if pygame.mixer.music.get_busy():
+            pygame.mixer.music.stop()
+
+    def play_audio_data(self, data):
+
+        try:
+            self.stop_audio()  # Stop any previous song
+
+            # Use io.BytesIO to treat raw bytes like a file
+            audio_file = io.BytesIO(data)
+
+            pygame.mixer.music.load(audio_file)
+            pygame.mixer.music.play()
+        except Exception as e:
+            print(f"Audio playback error: {e}")
+            self.lbl_preview_img.config(text="Audio Error")
+
+    # Author: Ngoc Huy
+    # Function: on_file_select
+    # Description:     
+    def fetch_preview_data(self, remote_path):
+        # Author: Quang Minh
+        # Fix: Implement timeout mechanism using threading
+        # Shared state to track if result is ready
+        # OLD:
+        # try:
+        #     data, file_type = self.client.preview_file(remote_path)
+        #     self.update_ui_preview(data, file_type)
+        # except Exception as e:
+        #     messagebox.showerror("Preview Error", f"Failed to preview file:\n {e}")
+        # NEW:
+        # Shared state to track if result is ready
+        result_state = {"finished": False}
+        data_lock = threading.Lock()
+
+        def timer_task():
+            time.sleep(5)  # Ngủ đúng 5 giây
+
+            with data_lock:
+                # Dậy kiểm tra xem Worker xong chưa
+                if not result_state["finished"]:
+                    # Nếu chưa xong -> Đánh dấu là đã xong (để chặn Worker update sau này)
+                    result_state["finished"] = True
+
+                    # Update UI báo lỗi Timeout -> Ngắt luồng hiển thị
+                    self.root.after(
+                        0,
+                        lambda: self.update_ui_preview(
+                            None, None, error="Preview Timeout (5s)"
+                        ),
+                    )
+                    # Lưu ý: Thread worker vẫn có thể chạy ngầm đến khi socket timeout,
+                    # nhưng kết quả của nó sẽ bị bỏ qua nhờ biến 'finished'.
+
+        def work():
+            try:
+                data, file_type = self.client.preview_file(remote_path)
+                with data_lock:
+                    # Kiểm tra xem đã timeout chưa
+                    if result_state["finished"]:
+                        return  # Đã timeout, bỏ qua kết quả này
+
+                    # Đánh dấu là đã hoàn thành
+                    result_state["finished"] = True
+                    # Cập nhật UI từ luồng chính
+                    self.root.after(0, lambda: self.update_ui_preview(data, file_type))
+
+            except Exception as e:
+                with data_lock:
+                    if result_state["finished"]:
+                        return
+                    result_state["finished"] = True
+                self.root.after(
+                    0,
+                    lambda e=e: messagebox.showerror(
+                        "Preview Error", f"Failed to preview file:\n {e}"
+                    ),
+                )
+
+        threading.Thread(target=timer_task, daemon=True).start()
+        threading.Thread(target=work, daemon=True).start()
+    def update_ui_preview(self, data, p_type):
+        """
+        Called by the thread to update the UI safely.
+        """
+        # pass
+
+        if not data:
+            self.lbl_preview_img.config(text="No Data")
+            return
+
+
+        if p_type == "image" and data:
+            try:
+                # Load image from bytes
+                pil_image = Image.open(io.BytesIO(data))
+
+                # Resize to fit container (250x250)
+                pil_image.thumbnail((240, 240))
+                tk_img = ImageTk.PhotoImage(pil_image)
+
+                # Update Label
+                self.current_image = tk_img  # Keep reference!
+                self.lbl_preview_img.config(image=tk_img, text="")
+            except Exception:
+                self.lbl_preview_img.config(image="", text="Image Error")        
+        # ================= TRƯỜNG HỢP: ẢNH =================
+
+        elif p_type == "text" and data:
+            self.lbl_preview_img.pack_forget()
+            self.txt_preview.pack(fill="both", expand=True)
+            self.txt_preview.delete("1.0", tk.END)
+            self.txt_preview.insert("1.0", data.decode("utf-8"))
+
+        elif p_type == "audio" and data:
+            self.lbl_preview_img.pack(fill="both", expand=True)
+            # You can replace this text with a "Music Note" icon if you have one
+            self.lbl_preview_img.config(
+                image="", text="🎵\nPlaying Audio Snippet...", font=("Segoe UI", 12)
+            )
+            # Play the sound
+            self.play_audio_data(data)
+        elif p_type == "tree" and data:
+            tree_data = json.dumps(data.decode("utf-8"))
+            self.lbl_preview_img.pack_forget()
+            self.txt_preview.pack(fill="both", expand=True)
+            self.txt_preview.delete("1.0", tk.END)
+            self.txt_preview.insert(tk.END, tree_data)
+            #
+        elif p_type == "video" and data:
+            try:
+                # Write data to temp file
+                self.temp_video = tempfile.NamedTemporaryFile(
+                    suffix=".mp4", delete=False
+                )
+                self.temp_video.write(data)
+                self.temp_video.close()
+
+                # Load and Play
+                self.video_player.load(self.temp_video.name)
+                self.video_player.play()
+
+            except Exception as e:
+                print(f"Video error: {e}")
+                self.lbl_preview_img.config(text="Video Error")
+        else:
+            self.lbl_preview_img.config(image="", text="No Preview Available")
 
 
 if __name__ == "__main__":
