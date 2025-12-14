@@ -368,7 +368,7 @@ class FileClientApp:
         self.tree.heading("#0", text="Folder / File Name", anchor="w")
         self.tree.column("#0", width=300)
         self.tree.heading("size", text="Size", anchor="w")
-        self.tree.column("size", width=100, anchor="e")
+        self.tree.column("size", width=100, anchor="w")
         self.tree.heading("kind", text="Type", anchor="w")
         self.tree.column("kind", width=100, anchor="w")
         # --- RIGHT FRAME (Modified for Preview) ---
