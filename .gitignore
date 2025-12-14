@@ -1,8 +1,12 @@
 # Byte-compiled / optimized / DLL files
 ./temp/
+./ClientSide/__pycache__/
+./ServerSide/__pycache__/
 __pycache__/
 *.py[codz]
 *$py.class
+
+./env/
 
 # C extensions
 *.so

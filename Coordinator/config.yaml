@@ -1,0 +1,22 @@
+# Thay the dia chi thanh dia chi ip tuong ung tren laptop trong wlan
+coordinator:
+  host: "127.0.0.1"
+  port: 9000
+image_server:
+  host: "127.0.0.1"
+  port: 9001
+video_server:
+  host: "127.0.0.1"
+  port: 9002
+
+text_server:
+  host: "127.0.0.1"
+  port: 9003
+
+sound_server:
+  host: "127.0.0.1"
+  port: 9004
+
+compressed_server:
+  host: "127.0.0.1"
+  port: 9005
