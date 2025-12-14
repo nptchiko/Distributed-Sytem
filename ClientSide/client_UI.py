@@ -12,7 +12,7 @@ import os
 import io
 import pygame  # -> de xu li am thanh
 import tempfile
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageOps
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 9000
@@ -1119,7 +1119,8 @@ class FileClientApp:
                 pil_image = Image.open(io.BytesIO(data))
 
                 # Resize to fit container (250x250)
-                pil_image.thumbnail((240, 240))
+                # pil_image.thumbnail((240, 240))
+                pil_image = ImageOps.fit(pil_image, (240, 240), method=Image.Resampling.LANCZOS, centering=(0.5, 0.0))
                 tk_img = ImageTk.PhotoImage(pil_image)
 
                 # Update Label
