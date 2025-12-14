@@ -331,9 +331,7 @@ class FileClientApp:
 
         self.entry_req = ttk.Entry(req_sub_frame)
         self.entry_req.pack(side="left", fill="x", expand=True)
-        ttk.Button(
-            req_sub_frame, text="Browse", width=8, command=self.browse_folder
-        ).pack(side="right", padx=(5, 0))
+        
 
         action_frame = ttk.Frame(input_card, style="Card.TFrame")
         action_frame.grid(row=4, column=1, sticky="w", padx=10, pady=10)
@@ -1217,7 +1215,7 @@ class FileClientApp:
 
             except Exception as e:
                 self.txt_preview.insert(tk.END, f"Error parsing ZIP tree: {e}")
-                
+
         elif p_type == "video" and data:
             try:
                 # Write data to temp file
