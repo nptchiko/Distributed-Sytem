@@ -331,9 +331,7 @@ class FileClientApp:
 
         self.entry_req = ttk.Entry(req_sub_frame)
         self.entry_req.pack(side="left", fill="x", expand=True)
-        ttk.Button(
-            req_sub_frame, text="Browse", width=8, command=self.browse_folder
-        ).pack(side="right", padx=(5, 0))
+        
 
         action_frame = ttk.Frame(input_card, style="Card.TFrame")
         action_frame.grid(row=4, column=1, sticky="w", padx=10, pady=10)
@@ -1145,13 +1143,79 @@ class FileClientApp:
             )
             # Play the sound
             self.play_audio_data(data)
+
         elif p_type == "tree" and data:
-            tree_data = json.dumps(data.decode("utf-8"))
-            self.lbl_preview_img.pack_forget()
-            self.txt_preview.pack(fill="both", expand=True)
-            self.txt_preview.delete("1.0", tk.END)
-            self.txt_preview.insert(tk.END, tree_data)
+            # tree_data = json.dumps(data.decode("utf-8"))
+            # self.lbl_preview_img.pack_forget()
+            # self.txt_preview.pack(fill="both", expand=True)
+            # self.txt_preview.delete("1.0", tk.END)
+            # self.txt_preview.insert(tk.END, tree_data)
             #
+            try:
+                # 1. Decode JSON
+                json_string = data.decode("utf-8")
+                tree_data = json.loads(json_string)
+
+                # 2. Xóa khung preview cũ
+                self.lbl_preview_img.pack_forget()
+                self.txt_preview.pack(fill="both", expand=True)
+                self.txt_preview.delete("1.0", tk.END)
+
+                # 3. Hàm đệ quy để vẽ cây thư mục
+                def draw_tree(node, prefix="", is_last=True, is_root=True):
+                    # Lấy tên file/folder
+                    name = node.get("name", "Unknown")
+                    
+                    # Xác định icon và ký tự nối (connector)
+                    if is_root:
+                        connector = ""
+                        child_prefix = ""
+                        icon = "📦"  # Icon cho file Zip gốc
+                        display_text = f"{icon} {name}\n"
+                    else:
+                        connector = "└── " if is_last else "├── "
+                        icon = "📁"  # Icon cho Folder
+                        display_text = f"{prefix}{connector}{icon} {name}\n"
+                        # Cập nhật prefix cho các con của node này
+                        child_prefix = prefix + ("    " if is_last else "│   ")
+
+                    # In ra node hiện tại (Folder/Zip)
+                    self.txt_preview.insert(tk.END, display_text)
+
+                    # Lấy danh sách con (Folder và File)
+                    subdirs = node.get("subdirectories") or []
+                    files = node.get("files") or []
+                    
+                    # Gộp chung lại để xử lý vòng lặp một thể (để biết ai là phần tử cuối cùng)
+                    # Tạo danh sách các item con: mỗi item là dict {type, data}
+                    children = []
+                    for d in subdirs:
+                        children.append({"type": "dir", "data": d})
+                    for f in files:
+                        children.append({"type": "file", "data": f})
+                    
+                    count = len(children)
+                    for i, child in enumerate(children):
+                        is_last_child = (i == count - 1)
+                        
+                        if child["type"] == "dir":
+                            # Gọi đệ quy nếu là Folder
+                            draw_tree(child["data"], child_prefix, is_last_child, is_root=False)
+                        else:
+                            # In trực tiếp nếu là File
+                            f_name = child["data"].get("name", "Unknown")
+                            f_connector = "└── " if is_last_child else "├── "
+                            
+                            # Dòng hiển thị file
+                            f_line = f"{child_prefix}{f_connector}📄 {f_name}\n"
+                            self.txt_preview.insert(tk.END, f_line)
+
+                # 4. Bắt đầu vẽ từ node gốc
+                draw_tree(tree_data, is_root=True)
+
+            except Exception as e:
+                self.txt_preview.insert(tk.END, f"Error parsing ZIP tree: {e}")
+
         elif p_type == "video" and data:
             try:
                 # Write data to temp file
