@@ -22,7 +22,7 @@ DEFAULT_PATH = "storage/"
 class FileClientApp:
     def __init__(self, root, host=DEFAULT_HOST, port=DEFAULT_PORT, path=DEFAULT_PATH):
         self.root = root
-        self.root.title("UI Client")
+        self.root.title("Distributed File System")
         self.root.geometry("1200x950")
 
         self.host = host
@@ -48,42 +48,116 @@ class FileClientApp:
         self.create_layout()
 
     def setup_styles(self):
-        # ... (Your existing styles code remain exactly the same) ...
         style = ttk.Style()
-        style.theme_use("clam")
+        style.theme_use("clam")  # 'clam' cho phép tùy chỉnh màu tốt nhất
 
-        style.configure("TFrame", background=self.colors["secondary"])
+        # --- MÀU SẮC ---
+        bg_color = self.colors["secondary"]
+        header_bg = self.colors["primary"]
+        accent_color = self.colors["accent"]
+        text_color = self.colors["text"]
+
+        # --- GENERAL ---
+        style.configure("TFrame", background=bg_color)
         style.configure(
-            "TLabel",
-            background=self.colors["secondary"],
-            foreground=self.colors["text"],
-            font=("Segoe UI", 10),
+            "TLabel", background=bg_color, foreground=text_color, font=("Segoe UI", 10)
         )
-        style.configure("TButton", font=("Segoe UI", 10), padding=6)
         style.configure(
             "Header.TLabel",
-            background=self.colors["primary"],
-            foreground=self.colors["white"],
-            font=("Segoe UI", 20, "bold"),
+            background=header_bg,
+            foreground="white",
+            font=("Segoe UI", 18, "bold"),
         )
-        style.configure("Card.TFrame", background=self.colors["white"], relief="flat")
+        style.configure(
+            "Card.TFrame", background="white", relief="flat"
+        )  # Card nền trắng
+
+        # --- TREEVIEW (QUAN TRỌNG) ---
+        # Tăng chiều cao dòng lên 30px cho thoáng
         style.configure(
             "Treeview",
             font=("Segoe UI", 10),
-            rowheight=25,
+            rowheight=35,
             background="white",
             fieldbackground="white",
+            borderwidth=0,
         )
+
+        # Header của bảng
         style.configure(
             "Treeview.Heading",
             font=("Segoe UI", 10, "bold"),
-            background="#bdc3c7",
-            foreground=self.colors["text"],
+            background="#ecf0f1",
+            foreground="#2c3e50",
+            relief="flat",
         )
+
+        # Màu khi chọn (Selection)
         style.map(
-            "TButton",
-            background=[("active", self.colors["accent"]), ("!disabled", "#bdc3c7")],
+            "Treeview",
+            background=[("selected", accent_color)],
+            foreground=[("selected", "white")],
         )
+
+        self.icons = {}
+        self.load_icons()
+
+    # def setup_styles(self):
+    #     # ... (Your existing styles code remain exactly the same) ...
+    #     style = ttk.Style()
+    #     style.theme_use("clam")
+
+    #     style.configure("TFrame", background=self.colors["secondary"])
+    #     style.configure(
+    #         "TLabel",
+    #         background=self.colors["secondary"],
+    #         foreground=self.colors["text"],
+    #         font=("Segoe UI", 10),
+    #     )
+    #     style.configure("TButton", font=("Segoe UI", 10), padding=6)
+    #     style.configure(
+    #         "Header.TLabel",
+    #         background=self.colors["primary"],
+    #         foreground=self.colors["white"],
+    #         font=("Segoe UI", 20, "bold"),
+    #     )
+    #     style.configure("Card.TFrame", background=self.colors["white"], relief="flat")
+    #     style.configure(
+    #         "Treeview",
+    #         font=("Segoe UI", 10),
+    #         rowheight=25,
+    #         background="white",
+    #         fieldbackground="white",
+    #     )
+    #     style.configure(
+    #         "Treeview.Heading",
+    #         font=("Segoe UI", 10, "bold"),
+    #         background="#bdc3c7",
+    #         foreground=self.colors["text"],
+    #     )
+    #     style.map(
+    #         "TButton",
+    #         background=[("active", self.colors["accent"]), ("!disabled", "#bdc3c7")],
+    #     )
+    #     self.icons = {}
+    #     self.load_icons()
+    # Hàm tạo nút bấm đẹp (CTA - Call To Action)
+    def create_cta_btn(self, parent, text, cmd, bg_color="#3498db"):
+        btn = tk.Button(
+            parent,
+            text=text,
+            command=cmd,
+            bg=bg_color,
+            fg="white",
+            font=("Segoe UI", 10, "bold"),
+            bd=0,  # Không viền
+            padx=20,
+            pady=8,  # Đệm nút rộng ra
+            cursor="hand2",
+            activebackground="#2980b9",  # Màu khi nhấn đậm hơn chút
+            activeforeground="white",
+        )
+        return btn
         self.icons = {}
         self.load_icons()
 
@@ -156,10 +230,11 @@ class FileClientApp:
         path = data.get("path")
         subdir: list = data.get("subdirectories")
         files: list = data.get("files")
-
+        self.tree.tag_configure("even", background="#f7f9fa")
+        self.tree.tag_configure("odd", background="white")
         directory_icon = self.icons.get("folder")
 
-        directory_node = {"text": " " + name}
+        directory_node = {"text": " " + name, "values": ("--", "Folder")}
 
         if directory_icon:
             directory_node["image"] = directory_icon
@@ -172,14 +247,21 @@ class FileClientApp:
 
         for file in files:
             file_name = file.get("name") or "Untitled"
-            file_path = file.get("path")
-
+            # file_path = file.get("path")
+            raw_size = file.get("size", 0)
+            size_str = self._format_size(raw_size)
+            # kind_str = self._get_kind_str(file_name)
+            kind_str = self._get_kind(file_name)
             file_icon = self._get_icon(file_name)
-
-            file_node = {"text": " " + file_name, "image": file_icon}
-
+            tag = "even" if self.row_count % 2 == 0 else "odd"
+            file_node = {
+                "text": " " + file_name,
+                "image": file_icon,
+                "values": (size_str, kind_str),
+                "tags": (tag),
+            }
+            self.row_count += 1
             self.tree.insert(node, tk.END, **file_node)
-        return node
 
     def create_layout(self):
         # ... (Keep Header and Left Frame code exactly the same until 'File Response List') ...
@@ -189,7 +271,9 @@ class FileClientApp:
         header_frame.pack(side="top", fill="x")
         header_frame.pack_propagate(False)
 
-        lbl_title = ttk.Label(header_frame, text="CLIENT UI", style="Header.TLabel")
+        lbl_title = ttk.Label(
+            header_frame, text="Distributed File System", style="Header.TLabel"
+        )
         lbl_title.pack(side="left", padx=20, pady=20)
 
         toolbar_frame = tk.Frame(header_frame, bg=self.colors["primary"])
@@ -271,13 +355,22 @@ class FileClientApp:
         tree_frame.pack(fill="both", expand=True)
 
         tree_scroll = ttk.Scrollbar(tree_frame)
-        self.tree = ttk.Treeview(tree_frame, yscrollcommand=tree_scroll.set, height=10)
+        self.tree = ttk.Treeview(
+            tree_frame,
+            yscrollcommand=tree_scroll.set,
+            height=10,
+            columns=("size", "kind"),
+        )
         tree_scroll.config(command=self.tree.yview)
 
         self.tree.pack(side="left", fill="both", expand=True)
         tree_scroll.pack(side="right", fill="y")
         self.tree.heading("#0", text="Folder / File Name", anchor="w")
-
+        self.tree.column("#0", width=300)
+        self.tree.heading("size", text="Size", anchor="w")
+        self.tree.column("size", width=100, anchor="e")
+        self.tree.heading("kind", text="Type", anchor="w")
+        self.tree.column("kind", width=100, anchor="w")
         # --- RIGHT FRAME (Modified for Preview) ---
         right_frame = ttk.Frame(body_frame, style="Card.TFrame", padding=15)
         right_frame.pack(side="right", fill="y", anchor="n")
@@ -408,21 +501,57 @@ class FileClientApp:
     # Function: create_toolbar_btn
     # Description: Create a toolbar button with icon and text
     def create_toolbar_btn(self, parent, text, icon, cmd):
+        # Màu sắc từ cấu hình
+        default_bg = self.colors["primary"]  # Màu nền trùng với Header (#2c3e50)
+        hover_bg = "#34495e"  # Màu khi di chuột (Sáng hơn một chút)
+        text_color = self.colors["white"]
+
         btn = tk.Button(
             parent,
             text=f"{icon}  {text}",
             command=cmd,
-            bg="#34495e",
-            fg="white",
-            bd=0,
-            padx=15,
-            pady=5,
-            activebackground="#2c3e50",
-            activeforeground="white",
-            font=("Segoe UI", 9, "bold"),
+            bg=default_bg,  # Nền mặc định tệp với header
+            fg=text_color,  # Màu chữ trắng
+            bd=0,  # Không viền (Border = 0)
+            padx=20,  # Khoảng cách ngang rộng hơn cho thoáng
+            pady=10,  # Chiều cao nút
+            activebackground=hover_bg,  # Màu khi click
+            activeforeground=text_color,
+            font=("Segoe UI", 10, "bold"),
+            cursor="hand2",  # Con trỏ hình bàn tay
+            relief="flat",  # Kiểu nút phẳng
         )
-        btn.pack(side="left", padx=5)
+
+        # --- HIỆU ỨNG HOVER (Di chuột vào đổi màu) ---
+        def on_enter(e):
+            btn.config(bg=hover_bg)
+
+        def on_leave(e):
+            btn.config(bg=default_bg)
+
+        btn.bind("<Enter>", on_enter)
+        btn.bind("<Leave>", on_leave)
+
+        btn.pack(side="left", padx=1)
+
         return btn
+
+    # def create_toolbar_btn(self, parent, text, icon, cmd):
+    #     btn = tk.Button(
+    #         parent,
+    #         text=f"{icon}  {text}",
+    #         command=cmd,
+    #         bg="#34495e",
+    #         fg="white",
+    #         bd=0,
+    #         padx=15,
+    #         pady=5,
+    #         activebackground="#2c3e50",
+    #         activeforeground="white",
+    #         font=("Segoe UI", 9, "bold"),
+    #     )
+    #     btn.pack(side="left", padx=5)
+    #     return btn
 
     # Author: Quang Minh
     # Function: browse_folder
@@ -458,7 +587,7 @@ class FileClientApp:
                 self.root.after(0, lambda: self._connect_success(host, port))
 
                 # Initial file list refresh
-                self.refresh_list()
+                # self.refresh_list()
 
             except Exception as e:
                 self.root.after(0, lambda: self._connect_failed(str(e)))
@@ -531,14 +660,109 @@ class FileClientApp:
                 "Not Connected", "Please connect to the server first."
             )
             return
-        self.refresh_list()
 
+        local_path = filedialog.askopenfilename(
+            title="Select File to Upload",
+            filetypes=[("All Files", "*.*")],
+        )
+
+        if not local_path:
+            return  # User cancelled
+
+        remote_name_str = self.entry_req.get()
+        remote_name = remote_name_str if remote_name_str.strip() else None
+
+        # Use a thread to avoid blocking the UI
+        threading.Thread(
+            target=self._execute_upload, args=(local_path, remote_name), daemon=True
+        ).start()
+
+    # def _execute_download(self, remote_path, local_path):
+    #     """Helper function to run the download in a separate thread."""
+    #     try:
+    #         if not self.client:
+    #             # This should not happen if is_connected is true, but as a safeguard
+    #             raise Exception("Client not initialized.")
+    #
+    #         result = self.client.download_file(remote_path, local_path)
+    #
+    #         if result and result.get("payload", {}).get("ok"):
+    #             self.root.after(
+    #                 0,
+    #                 lambda: messagebox.showinfo(
+    #                     "Success",
+    #                     f"File '{os.path.basename(remote_path)}' downloaded successfully.",
+    #                 ),
+    #             )
+    #         else:
+    #             error_msg = result.get("payload", {}).get(
+    #                 "error", "Unknown download error."
+    #             )
+    #             self.root.after(
+    #                 0,
+    #                 lambda: messagebox.showerror(
+    #                     "Download Failed",
+    #                     f"Failed to download '{os.path.basename(remote_path)}': {error_msg}",
+    #                 ),
+    #             )
+    #     except Exception as e:
+    #         self.root.after(
+    #             0,
+    #             lambda: messagebox.showerror(
+    #                 "Download Error", f"An error occurred during download: {e}"
+    #             ),
+    #         )
+    #     """Nút Send Request: Thực chất là gửi lệnh List với các Filter đã chọn"""
+    #     if not self.is_connected:
+    #         messagebox.showwarning("Warning", "Please connect to server first.")
+    #         return
+    #     self.refresh_list()
+    #
     # ---- File operations ----
     # Author: Quang Minh
     # Function: refresh_list
     # Description: Refresh the file list from server based on active filters
+    # def refresh_list(self):
+    #     if not self.is_connected:
+    #         return
+
+    #     filters = self._get_active_filters()
+    #     self.log_msg(f"Requesting list. Filters: {filters}")
+
+    #     def work():
+    #         try:
+
+    #             for i in self.tree.get_children():
+    #                 self.tree.delete(i)
+    #             # Call list_files with filters
+    #             resp = self.client.list_files(filter=filters)
+    #             if resp and resp.get("type") == "list":  # Server returned file list
+    #                 files = resp["payload"].get("files", [])
+    #                 # Update request
+    #                 self.set_request(f"{DEFAULT_PATH}")
+    #                 # Update treeview on main thread
+    #                 self.root.after(0, lambda: self.populate_tree("", resp["payload"]))
+
+    #             elif resp and resp.get("type") == "error":
+    #                 msg = resp.get("payload")
+    #                 self.root.after(0, lambda: self.log_msg(f"Server Error: {msg}"))
+    #             else:
+
+    #                 self.root.after(
+    #                     0, lambda: self.log_msg(f"Unknown response: {resp}")
+    #                 )
+
+    #         except Exception as e:
+    #             self.root.after(0, lambda e=e: self.log_msg(f"List failed: {e}"))
+
+    # threading.Thread(target=work, daemon=True).start()
+    # Author: Quang Minh
+    # Function: refresh_list
+    # Description: Lấy danh sách thật từ Server và hiển thị với giao diện đẹp
     def refresh_list(self):
         if not self.is_connected:
+            # Thêm thông báo nếu chưa kết nối
+            messagebox.showwarning("Warning", "Please connect to server first.")
             return
 
         filters = self._get_active_filters()
@@ -546,26 +770,32 @@ class FileClientApp:
 
         def work():
             try:
-
-                for i in self.tree.get_children():
-                    self.tree.delete(i)
-                # Call list_files with filters
+                # 1. Gửi request lên Server (vẫn giữ nguyên logic cũ)
                 resp = self.client.list_files(filter=filters)
+
+                # 2. Xử lý kết quả
                 if resp and resp.get("type") == "list":  # Server returned file list
-                    files = resp["payload"].get("files", [])
-                    # Update request
-                    self.set_request(f"{DEFAULT_PATH}")
+                    payload = resp["payload"]  # Lấy dữ liệu thực
 
-                    # Update treeview
-                    def populate():
-                        root_node_id = self.populate_tree("", resp["payload"])
+                    # --- CẬP NHẬT GIAO DIỆN (Main Thread) ---
+                    def update_ui():
+                        # a. Xóa dữ liệu cũ trên cây
+                        for i in self.tree.get_children():
+                            self.tree.delete(i)
 
-                        if root_node_id:
-                            self.tree.item(root_node_id, open=True)
-                        self.root.after(0, lambda: self.log_msg("List updated."))
+                        # b. [QUAN TRỌNG] Reset biến đếm màu về 0
+                        # (Để tính năng tô màu xen kẽ hoạt động đúng từ dòng đầu tiên)
+                        self.row_count = 0
 
-                    # Update treeview on main thread
-                    self.root.after(0, lambda: populate())
+                        # c. Đổ dữ liệu thật vào cây (Gọi đệ quy)
+                        self.populate_tree("", payload)
+
+                        # d. Cập nhật thanh trạng thái
+                        self.set_request(f"{DEFAULT_PATH}")
+                        self.log_msg("File list updated.")
+
+                    # Đẩy việc cập nhật UI về luồng chính
+                    self.root.after(0, update_ui)
 
                 elif resp and resp.get("type") == "error":
                     msg = resp.get("payload")
@@ -580,6 +810,27 @@ class FileClientApp:
                 self.root.after(0, lambda e=e: self.log_msg(f"List failed: {e}"))
 
         threading.Thread(target=work, daemon=True).start()
+
+    #
+    # # Author: Quang Minh
+    # # Function: _update_treeview
+    # # Description: Update the file list in the treeview
+    # def _update_treeview(self, files):
+    #     self.tree.delete(*self.tree.get_children())
+    #     if not files:
+    #         self.log_msg("No files found.")
+    #         return
+    #
+    #     for i, f in enumerate(files):
+    #         name = f.get("name", "Unknown")
+    #         size = f.get("size", 0)
+    #         sha = f.get("sha256", "")
+    #
+    #         tag = "odd" if i % 2 != 0 else "even"
+    #         # Insert vào treeview
+    #         self.tree.insert("", "end", text=name, values=(size, sha), tags=(tag,))
+    #
+    #     self.log_msg(f"Updated list with {len(files)} files.")
 
     # Author: Ngoc Huy
     # Function: on_download_click
@@ -668,6 +919,20 @@ class FileClientApp:
 
         threading.Thread(target=work, daemon=True).start()
 
+    # ---  Hàm chuyển đổi kích thước file sang KB/MB ---
+    def _format_size(self, size_in_bytes):
+        if not size_in_bytes:
+            return "--"
+        try:
+            size = float(size_in_bytes)
+            for unit in ["B", "KB", "MB", "GB", "TB"]:
+                if size < 1024.0:
+                    return f"{size:.1f} {unit}"
+                size /= 1024.0
+            return f"{size:.1f} TB"
+        except (ValueError, TypeError):
+            return "0 B"
+
     def on_upload_click(self):
         if not self.is_connected:
             messagebox.showwarning(
@@ -716,14 +981,14 @@ class FileClientApp:
 
         while current_id:
             item_text = self.tree.item(current_id, "text")
-            clean_name = item_text.lstrip() 
+            clean_name = item_text.lstrip()
             path_parts.insert(0, clean_name)
             current_id = self.tree.parent(current_id)
         return "/".join(path_parts)
 
     # Author: Ngoc Huy
     # Function: on_file_select
-    # Description: 
+    # Description:
     def on_file_select(self, event):
 
         self.stop_audio()
@@ -777,7 +1042,7 @@ class FileClientApp:
 
     # Author: Ngoc Huy
     # Function: on_file_select
-    # Description:     
+    # Description:
     def fetch_preview_data(self, remote_path):
         # Author: Quang Minh
         # Fix: Implement timeout mechanism using threading
@@ -839,6 +1104,7 @@ class FileClientApp:
 
         threading.Thread(target=timer_task, daemon=True).start()
         threading.Thread(target=work, daemon=True).start()
+
     def update_ui_preview(self, data, p_type):
         """
         Called by the thread to update the UI safely.
@@ -848,7 +1114,6 @@ class FileClientApp:
         if not data:
             self.lbl_preview_img.config(text="No Data")
             return
-
 
         if p_type == "image" and data:
             try:
@@ -863,7 +1128,7 @@ class FileClientApp:
                 self.current_image = tk_img  # Keep reference!
                 self.lbl_preview_img.config(image=tk_img, text="")
             except Exception:
-                self.lbl_preview_img.config(image="", text="Image Error")        
+                self.lbl_preview_img.config(image="", text="Image Error")
         # ================= TRƯỜNG HỢP: ẢNH =================
 
         elif p_type == "text" and data:
@@ -905,6 +1170,34 @@ class FileClientApp:
                 self.lbl_preview_img.config(text="Video Error")
         else:
             self.lbl_preview_img.config(image="", text="No Preview Available")
+
+    # ---  Hàm xác định loại file ---
+    def _get_kind(self, filename, is_folder=False):
+        if is_folder:
+            return "Folder"
+
+        _, ext = os.path.splitext(filename)
+        ext = ext.lower()
+
+        kind_map = {
+            ".jpg": "JPEG Image",
+            ".jpeg": "JPEG Image",
+            ".png": "PNG Image",
+            ".gif": "GIF Image",
+            ".mp4": "MPEG-4 Video",
+            ".mkv": "Matroska Video",
+            ".avi": "AVI Video",
+            ".mp3": "MP3 Audio",
+            ".wav": "WAV Audio",
+            ".txt": "Text Document",
+            ".pdf": "PDF Document",
+            ".doc": "Word Doc",
+            ".docx": "Word Doc",
+            ".zip": "ZIP Archive",
+            ".rar": "RAR Archive",
+            ".7z": "7-Zip Archive",
+        }
+        return kind_map.get(ext, f"{ext.upper().replace('.', '')} File")
 
 
 if __name__ == "__main__":
