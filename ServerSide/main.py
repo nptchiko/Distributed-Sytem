@@ -169,12 +169,16 @@ def load_directory(root_path, filters):
         for filename in files:
             file_path = os.path.join(parent_path, filename)
 
+            ### FIX
+
+            file_size = os.path.getsize(os.path.relpath(file_path, storage_parent_dir))
             # Check if the file matches any of the filters
             if any(is_end_with(f, file_path) for f in filters):
                 parent_node["files"].append(
                     {
                         "name": filename,
                         "path": os.path.relpath(file_path, storage_parent_dir),
+                        "size": file_size,
                     }
                 )
 
