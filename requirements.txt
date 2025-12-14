@@ -3,7 +3,7 @@ opencv-python
 PyMuPDF
 numpy
 pydub
-# audioop-lts
+audioop-lts
 PyYAML
 pygame
 
