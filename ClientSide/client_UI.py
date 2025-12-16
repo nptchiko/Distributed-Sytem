@@ -661,22 +661,7 @@ class FileClientApp:
                 "Not Connected", "Please connect to the server first."
             )
             return
-
-        local_path = filedialog.askopenfilename(
-            title="Select File to Upload",
-            filetypes=[("All Files", "*.*")],
-        )
-
-        if not local_path:
-            return  # User cancelled
-
-        remote_name_str = self.entry_req.get()
-        remote_name = remote_name_str if remote_name_str.strip() else None
-
-        # Use a thread to avoid blocking the UI
-        threading.Thread(
-            target=self._execute_upload, args=(local_path, remote_name), daemon=True
-        ).start()
+        self.refresh_list()
 
     # def _execute_download(self, remote_path, local_path):
     #     """Helper function to run the download in a separate thread."""
