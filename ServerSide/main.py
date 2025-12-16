@@ -562,7 +562,7 @@ def handle_preview(sock: socket.socket, path: str):
         preview_type = "image"
 
     elif ext in [".pdf"]:
-        preview_data = _get_pdf_thumbnail(path)
+        preview_data = _get_pdf_thumbnail(path, num_pages=1)
         preview_type = "image"
 
     elif ext in [".mp4", ".avi", ".mkv", ".mov", ".webm"]:

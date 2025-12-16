@@ -7,7 +7,7 @@ from typing import final
 import yaml
 
 
-HOST = "127.0.0.1"
+HOST = "0.0.0.0"
 PORT = 9000
 
 # Server addresses
