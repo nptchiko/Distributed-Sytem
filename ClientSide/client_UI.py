@@ -861,6 +861,7 @@ class FileClientApp:
 
         def work():
             try:
+                import os
                 directory = os.path.dirname(local_path)
 
                 if directory and not os.path.exists(directory):
