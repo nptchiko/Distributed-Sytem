@@ -1092,11 +1092,16 @@ class FileClientApp:
         threading.Thread(target=timer_task, daemon=True).start()
         threading.Thread(target=work, daemon=True).start()
 
-    def update_ui_preview(self, data, p_type):
+    def update_ui_preview(self, data, p_type, error=None):
         """
         Called by the thread to update the UI safely.
         """
         # pass
+        if error:
+            self.lbl_preview_img.config(image="", text=error)
+            self.txt_preview.pack_forget()
+            self.lbl_preview_img.pack(fill="both", expand=True)
+            return
 
         if not data:
             self.lbl_preview_img.config(text="No Data")
