@@ -262,6 +262,7 @@ class FileClientApp:
             }
             self.row_count += 1
             self.tree.insert(node, tk.END, **file_node)
+        return node
 
     def create_layout(self):
         # ... (Keep Header and Left Frame code exactly the same until 'File Response List') ...
@@ -788,7 +789,9 @@ class FileClientApp:
                         self.row_count = 0
 
                         # c. Đổ dữ liệu thật vào cây (Gọi đệ quy)
-                        self.populate_tree("", payload)
+                        root_node_id = self.populate_tree("", payload)
+                        if root_node_id:
+                            self.tree.item(root_node_id, open=True)
 
                         # d. Cập nhật thanh trạng thái
                         self.set_request(f"{DEFAULT_PATH}")
