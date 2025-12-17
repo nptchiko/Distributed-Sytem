@@ -465,10 +465,12 @@ class Coordinator:
         path = request.get("path", DEFAULT_PATH)
         filters = request.get("filters", ["all"])
 
+        resp_path = path.split("/")[-1] or "storage"
+
         final_response = {
             "type": "list",
             "payload": {
-                "name": "storage",
+                "name": resp_path,
                 "path": path,
                 "subdirectories": [],
                 "files": [],
