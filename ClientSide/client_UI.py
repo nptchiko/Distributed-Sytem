@@ -324,7 +324,7 @@ class FileClientApp:
         self.port_var_entry.insert(0, str(self.port))
         self.port_var_entry.grid(row=2, column=1, sticky="ew", padx=10)
 
-        ttk.Label(input_card, text="Request:", background="white").grid(
+        ttk.Label(input_card, text="Path:", background="white").grid(
             row=3, column=0, sticky="w", pady=5
         )
         req_sub_frame = ttk.Frame(input_card, style="Card.TFrame")
@@ -332,7 +332,6 @@ class FileClientApp:
 
         self.entry_req = ttk.Entry(req_sub_frame)
         self.entry_req.pack(side="left", fill="x", expand=True)
-        
 
         action_frame = ttk.Frame(input_card, style="Card.TFrame")
         action_frame.grid(row=4, column=1, sticky="w", padx=10, pady=10)
@@ -485,7 +484,6 @@ class FileClientApp:
         self.entry_req.config(state="normal")
         self.entry_req.delete(0, tk.END)
         self.entry_req.insert(0, s)
-        self.entry_req.config(state="readonly")
 
     # Author: Quang Minh
     # Function: browse_folder
@@ -755,7 +753,7 @@ class FileClientApp:
         def work():
             try:
                 # 1. Gửi request lên Server (vẫn giữ nguyên logic cũ)
-                resp = self.client.list_files(filter=filters)
+                resp = self.client.list_files(filter=filters, path=self.entry_req.get())
 
                 # 2. Xử lý kết quả
                 if resp and resp.get("type") == "list":  # Server returned file list
@@ -848,6 +846,7 @@ class FileClientApp:
         def work():
             try:
                 import os
+
                 directory = os.path.dirname(local_path)
 
                 if directory and not os.path.exists(directory):
@@ -1114,7 +1113,12 @@ class FileClientApp:
 
                 # Resize to fit container (250x250)
                 # pil_image.thumbnail((240, 240))
-                pil_image = ImageOps.fit(pil_image, (240, 240), method=Image.Resampling.LANCZOS, centering=(0.5, 0.0))
+                pil_image = ImageOps.fit(
+                    pil_image,
+                    (240, 240),
+                    method=Image.Resampling.LANCZOS,
+                    centering=(0.5, 0.0),
+                )
                 tk_img = ImageTk.PhotoImage(pil_image)
 
                 # Update Label
@@ -1160,7 +1164,7 @@ class FileClientApp:
                 def draw_tree(node, prefix="", is_last=True, is_root=True):
                     # Lấy tên file/folder
                     name = node.get("name", "Unknown")
-                    
+
                     # Xác định icon và ký tự nối (connector)
                     if is_root:
                         connector = ""
@@ -1180,7 +1184,7 @@ class FileClientApp:
                     # Lấy danh sách con (Folder và File)
                     subdirs = node.get("subdirectories") or []
                     files = node.get("files") or []
-                    
+
                     # Gộp chung lại để xử lý vòng lặp một thể (để biết ai là phần tử cuối cùng)
                     # Tạo danh sách các item con: mỗi item là dict {type, data}
                     children = []
@@ -1188,19 +1192,24 @@ class FileClientApp:
                         children.append({"type": "dir", "data": d})
                     for f in files:
                         children.append({"type": "file", "data": f})
-                    
+
                     count = len(children)
                     for i, child in enumerate(children):
-                        is_last_child = (i == count - 1)
-                        
+                        is_last_child = i == count - 1
+
                         if child["type"] == "dir":
                             # Gọi đệ quy nếu là Folder
-                            draw_tree(child["data"], child_prefix, is_last_child, is_root=False)
+                            draw_tree(
+                                child["data"],
+                                child_prefix,
+                                is_last_child,
+                                is_root=False,
+                            )
                         else:
                             # In trực tiếp nếu là File
                             f_name = child["data"].get("name", "Unknown")
                             f_connector = "└── " if is_last_child else "├── "
-                            
+
                             # Dòng hiển thị file
                             f_line = f"{child_prefix}{f_connector}📄 {f_name}\n"
                             self.txt_preview.insert(tk.END, f_line)

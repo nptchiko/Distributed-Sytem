@@ -447,7 +447,8 @@ class Coordinator:
 
         for item in data_list:
             root_path = item["path"]
-
+            if not item["subdirectories"] and not item["files"]:
+                continue
             if root_path not in merged_roots:
                 # Nếu root chưa có, copy làm gốc
                 # Dùng deepcopy nếu dữ liệu phức tạp, ở đây dict đơn giản có thể gán hoặc copy nông

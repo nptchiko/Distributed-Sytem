@@ -99,12 +99,12 @@ class DFSClient:
     # author: Quang Minh
     # agruemnt: filter
     # example: "all", "image", "video"
-    def list_files(self, filter: list[str]):
+    def list_files(self, filter: list[str], path: str):
         self._send_control(
             {
                 "command": "list",
                 "filters": filter or [],
-                "path": self.path,
+                "path": path or self.path,
             }
         )
         return self._recv_control()
