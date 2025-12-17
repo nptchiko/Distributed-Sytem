@@ -262,6 +262,7 @@ class FileClientApp:
             }
             self.row_count += 1
             self.tree.insert(node, tk.END, **file_node)
+        return node
 
     def create_layout(self):
         # ... (Keep Header and Left Frame code exactly the same until 'File Response List') ...
@@ -658,22 +659,7 @@ class FileClientApp:
                 "Not Connected", "Please connect to the server first."
             )
             return
-
-        local_path = filedialog.askopenfilename(
-            title="Select File to Upload",
-            filetypes=[("All Files", "*.*")],
-        )
-
-        if not local_path:
-            return  # User cancelled
-
-        remote_name_str = self.entry_req.get()
-        remote_name = remote_name_str if remote_name_str.strip() else None
-
-        # Use a thread to avoid blocking the UI
-        threading.Thread(
-            target=self._execute_upload, args=(local_path, remote_name), daemon=True
-        ).start()
+        self.refresh_list()
 
     # def _execute_download(self, remote_path, local_path):
     #     """Helper function to run the download in a separate thread."""
@@ -786,7 +772,9 @@ class FileClientApp:
                         self.row_count = 0
 
                         # c. Đổ dữ liệu thật vào cây (Gọi đệ quy)
-                        self.populate_tree("", payload)
+                        root_node_id = self.populate_tree("", payload)
+                        if root_node_id:
+                            self.tree.item(root_node_id, open=True)
 
                         # d. Cập nhật thanh trạng thái
                         self.set_request(f"{DEFAULT_PATH}")
@@ -859,6 +847,7 @@ class FileClientApp:
 
         def work():
             try:
+                import os
                 directory = os.path.dirname(local_path)
 
                 if directory and not os.path.exists(directory):
@@ -1103,11 +1092,16 @@ class FileClientApp:
         threading.Thread(target=timer_task, daemon=True).start()
         threading.Thread(target=work, daemon=True).start()
 
-    def update_ui_preview(self, data, p_type):
+    def update_ui_preview(self, data, p_type, error=None):
         """
         Called by the thread to update the UI safely.
         """
         # pass
+        if error:
+            self.lbl_preview_img.config(image="", text=error)
+            self.txt_preview.pack_forget()
+            self.lbl_preview_img.pack(fill="both", expand=True)
+            return
 
         if not data:
             self.lbl_preview_img.config(text="No Data")
